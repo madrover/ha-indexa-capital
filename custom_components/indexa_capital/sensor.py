@@ -38,6 +38,14 @@ class IndexaSensorEntityDescription(SensorEntityDescription):
 
 ACCOUNT_SENSORS = (
     IndexaSensorEntityDescription(
+        key="contributions_amount",
+        translation_key="contributions_amount",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        value_fn=lambda account, coordinator: account.invested_amount,
+    ),
+    IndexaSensorEntityDescription(
         key="performance_amount",
         translation_key="performance_amount",
         device_class=SensorDeviceClass.MONETARY,
@@ -51,11 +59,27 @@ ACCOUNT_SENSORS = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
-        value_fn=lambda account, coordinator: account.performance_percentage,
+        value_fn=lambda account, coordinator: account.time_weighted_performance_percentage,
+    ),
+    IndexaSensorEntityDescription(
+        key="money_weighted_performance_percentage",
+        translation_key="money_weighted_performance_percentage",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        value_fn=lambda account, coordinator: account.money_weighted_performance_percentage,
     ),
 )
 
 AGGREGATE_SENSORS = (
+    IndexaSensorEntityDescription(
+        key="total_contributions_amount",
+        translation_key="total_contributions_amount",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        value_fn=lambda snapshot, coordinator: snapshot.total_contributions_amount,
+    ),
     IndexaSensorEntityDescription(
         key="total_performance_amount",
         translation_key="total_performance_amount",
@@ -71,6 +95,14 @@ AGGREGATE_SENSORS = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_fn=lambda snapshot, coordinator: snapshot.total_performance_percentage,
+    ),
+    IndexaSensorEntityDescription(
+        key="total_money_weighted_performance_percentage",
+        translation_key="total_money_weighted_performance_percentage",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        value_fn=lambda snapshot, coordinator: snapshot.total_money_weighted_performance_percentage,
     ),
 )
 

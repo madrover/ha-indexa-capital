@@ -153,6 +153,12 @@ class IndexaApiClient:
         perf_return = performance.get("return", {})
         profile_account = profile_account or {}
         history_items = self._extract_history(performance)
+        time_return_index = self._extract_time_return_index(performance)
+        portfolio_value_history = self._extract_portfolio_value_history(performance)
+        external_cash_flow_history = self._infer_external_cash_flows(
+            time_return_index,
+            portfolio_value_history,
+        )
         latest_history = history_items[-1] if history_items else {}
         latest_history_date = self._parse_date(
             latest_history.get("date") or latest_history.get("day") or latest_history.get("label")
@@ -183,6 +189,12 @@ class IndexaApiClient:
             or performance.get("time_return")
             or performance.get("timeReturn")
         )
+        money_return = self._coerce_float(
+            perf_return.get("money_return")
+            or perf_return.get("moneyReturn")
+            or performance.get("money_return")
+            or performance.get("moneyReturn")
+        )
         display_name = (
             detail.get("name")
             or detail.get("display_name")
@@ -207,9 +219,13 @@ class IndexaApiClient:
             currency=str(currency),
             invested_amount=invested_amount,
             performance_amount=performance_amount,
-            performance_percentage=time_return * 100,
+            time_weighted_performance_percentage=time_return * 100,
+            money_weighted_performance_percentage=money_return * 100,
             latest_history_date=latest_history_date,
             latest_history_value=latest_history_value,
+            time_return_index=time_return_index,
+            portfolio_value_history=portfolio_value_history,
+            external_cash_flow_history=external_cash_flow_history,
         )
 
     def _default_account_name(
@@ -255,6 +271,101 @@ class IndexaApiClient:
                 )
                 return rows
         return []
+
+    def _extract_time_return_index(self, payload: dict[str, Any]) -> dict[str, float]:
+        """Extract the daily time-return index series from the performance payload."""
+        index_payload = payload.get("return", {}).get("index")
+        if not isinstance(index_payload, dict):
+            return {}
+
+        history: dict[str, float] = {}
+        for raw_date, value in index_payload.items():
+            normalized_date = self._normalize_compact_date(raw_date)
+            if normalized_date is None:
+                continue
+            history[normalized_date] = self._coerce_float(value)
+        return history
+
+    def _extract_portfolio_value_history(self, payload: dict[str, Any]) -> dict[str, float]:
+        """Extract the daily portfolio-value series from the performance payload."""
+        list_candidates: list[list[dict[str, Any]]] = []
+
+        def walk(node: Any) -> None:
+            if isinstance(node, list):
+                rows = [item for item in node if isinstance(item, dict)]
+                matching_rows = [
+                    item
+                    for item in rows
+                    if (
+                        ("total_amount" in item or "totalAmount" in item)
+                        and ("date" in item or "day" in item)
+                    )
+                ]
+                if matching_rows:
+                    list_candidates.append(matching_rows)
+                for item in rows:
+                    walk(item)
+                return
+
+            if isinstance(node, dict):
+                for value in node.values():
+                    walk(value)
+
+        walk(payload)
+
+        if not list_candidates:
+            return {}
+
+        best_candidate = max(list_candidates, key=len)
+        history: dict[str, float] = {}
+        for row in best_candidate:
+            raw_date = row.get("date") or row.get("day")
+            parsed_date = self._parse_date(raw_date)
+            if parsed_date is None:
+                continue
+            history[parsed_date.isoformat()] = self._coerce_float(
+                row.get("total_amount") or row.get("totalAmount")
+            )
+        return history
+
+    def _infer_external_cash_flows(
+        self,
+        time_return_index: dict[str, float],
+        portfolio_value_history: dict[str, float],
+    ) -> dict[str, float]:
+        """Infer external cash flows from daily values and the time-return index."""
+        common_dates = sorted(set(time_return_index) & set(portfolio_value_history))
+        if not common_dates:
+            return {}
+
+        cash_flows: dict[str, float] = {}
+        first_date = common_dates[0]
+        first_index = time_return_index[first_date]
+        first_value = portfolio_value_history[first_date]
+        if first_index != 0 and first_value != 0:
+            cash_flows[first_date] = -(first_value / first_index)
+
+        previous_date = first_date
+        for current_date in common_dates[1:]:
+            previous_index = time_return_index.get(previous_date)
+            current_index = time_return_index.get(current_date)
+            previous_value = portfolio_value_history.get(previous_date)
+            current_value = portfolio_value_history.get(current_date)
+            if (
+                previous_index in (None, 0)
+                or current_index is None
+                or previous_value is None
+                or current_value is None
+            ):
+                previous_date = current_date
+                continue
+
+            inferred_flow = current_value - (previous_value * (current_index / previous_index))
+            if abs(inferred_flow) > 1e-9:
+                cash_flows[current_date] = -inferred_flow
+            previous_date = current_date
+
+        return cash_flows
 
     def _normalize_index_history(self, payload: Any) -> list[dict[str, Any]] | None:
         """Normalize dict-based history maps like the documented `return.index` payload."""
@@ -321,7 +432,13 @@ def snapshot_to_dict(snapshot: IndexaPortfolioSnapshot | None) -> dict[str, Any]
                 ),
             }
             for account in snapshot.accounts
-        ]
+        ],
+        "computed_total_time_weighted_performance_percentage": (
+            snapshot.computed_total_time_weighted_performance_percentage
+        ),
+        "computed_total_money_weighted_performance_percentage": (
+            snapshot.computed_total_money_weighted_performance_percentage
+        ),
     }
 
 
@@ -340,7 +457,18 @@ def dict_to_snapshot(payload: dict[str, Any] | None) -> IndexaPortfolioSnapshot 
                 currency=str(raw_account["currency"]),
                 invested_amount=float(raw_account["invested_amount"]),
                 performance_amount=float(raw_account["performance_amount"]),
-                performance_percentage=float(raw_account["performance_percentage"]),
+                time_weighted_performance_percentage=float(
+                    raw_account.get(
+                        "time_weighted_performance_percentage",
+                        raw_account.get("performance_percentage", 0.0),
+                    )
+                ),
+                money_weighted_performance_percentage=float(
+                    raw_account.get(
+                        "money_weighted_performance_percentage",
+                        raw_account.get("performance_percentage", 0.0),
+                    )
+                ),
                 latest_history_date=(
                     date.fromisoformat(latest_history_date)
                     if isinstance(latest_history_date, str)
@@ -351,7 +479,27 @@ def dict_to_snapshot(payload: dict[str, Any] | None) -> IndexaPortfolioSnapshot 
                     if raw_account.get("latest_history_value") is not None
                     else None
                 ),
+                time_return_index={
+                    str(key): float(value)
+                    for key, value in raw_account.get("time_return_index", {}).items()
+                },
+                portfolio_value_history={
+                    str(key): float(value)
+                    for key, value in raw_account.get("portfolio_value_history", {}).items()
+                },
+                external_cash_flow_history={
+                    str(key): float(value)
+                    for key, value in raw_account.get("external_cash_flow_history", {}).items()
+                },
             )
         )
 
-    return IndexaPortfolioSnapshot(accounts=accounts)
+    return IndexaPortfolioSnapshot(
+        accounts=accounts,
+        computed_total_time_weighted_performance_percentage=payload.get(
+            "computed_total_time_weighted_performance_percentage"
+        ),
+        computed_total_money_weighted_performance_percentage=payload.get(
+            "computed_total_money_weighted_performance_percentage"
+        ),
+    )

@@ -3,6 +3,11 @@ name: Validate
 on:
   push:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
@@ -17,4 +22,3 @@ jobs:
         uses: hacs/action@main
         with:
           category: integration
-
