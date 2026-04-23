@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ha-indexa-capital"
+version = "0.1.0"
+description = "Home Assistant custom integration for Indexa Capital daily performance tracking"
+requires-python = ">=3.12"
+
+[project.optional-dependencies]
+dev = [
+  "homeassistant",
+  "pytest",
+  "pytest-homeassistant-custom-component",
+  "ruff",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "RUF"]
