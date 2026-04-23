@@ -29,26 +29,51 @@ async def test_sensors_created_and_weighted(hass, mock_entry, sample_snapshot):
     mock_entry.add_to_hass(hass)
     coordinator = IndexaPortfolioCoordinator(hass, mock_entry, FakeClient(sample_snapshot))
     await coordinator.async_initialize()
+    account_descriptions = {description.key: description for description in ACCOUNT_SENSORS}
+    aggregate_descriptions = {description.key: description for description in AGGREGATE_SENSORS}
+
     contribution_sensor = IndexaAccountSensor(
         coordinator,
         mock_entry,
         "ACC1",
-        ACCOUNT_SENSORS[0],
+        account_descriptions["contributions_amount"],
     )
-    account_sensor = IndexaAccountSensor(
+    performance_amount_sensor = IndexaAccountSensor(
         coordinator,
         mock_entry,
         "ACC1",
-        ACCOUNT_SENSORS[1],
+        account_descriptions["performance_amount"],
+    )
+    time_weighted_sensor = IndexaAccountSensor(
+        coordinator,
+        mock_entry,
+        "ACC1",
+        account_descriptions["performance_percentage"],
+    )
+    money_weighted_sensor = IndexaAccountSensor(
+        coordinator,
+        mock_entry,
+        "ACC1",
+        account_descriptions["money_weighted_performance_percentage"],
     )
     total_contribution_sensor = IndexaAggregateSensor(
-        coordinator, mock_entry, AGGREGATE_SENSORS[0]
+        coordinator, mock_entry, aggregate_descriptions["total_contributions_amount"]
     )
-    aggregate_sensor = IndexaAggregateSensor(coordinator, mock_entry, AGGREGATE_SENSORS[2])
+    total_time_weighted_sensor = IndexaAggregateSensor(
+        coordinator, mock_entry, aggregate_descriptions["total_performance_percentage"]
+    )
+    total_money_weighted_sensor = IndexaAggregateSensor(
+        coordinator,
+        mock_entry,
+        aggregate_descriptions["total_money_weighted_performance_percentage"],
+    )
 
-    assert contribution_sensor.native_value == 1000.0
+    assert contribution_sensor.native_value == 200.0
     assert contribution_sensor.native_unit_of_measurement == "EUR"
-    assert account_sensor.native_value == 50.0
-    assert account_sensor.native_unit_of_measurement == "EUR"
-    assert total_contribution_sensor.native_value == 4000.0
-    assert aggregate_sensor.native_value == pytest.approx(3.5)
+    assert performance_amount_sensor.native_value == 40.0
+    assert performance_amount_sensor.native_unit_of_measurement == "EUR"
+    assert time_weighted_sensor.native_value == 10.0
+    assert money_weighted_sensor.native_value == pytest.approx(27.2117940390)
+    assert total_contribution_sensor.native_value == 400.0
+    assert total_time_weighted_sensor.native_value == pytest.approx(3.3333333333)
+    assert total_money_weighted_sensor.native_value == pytest.approx(11.4730648425)
