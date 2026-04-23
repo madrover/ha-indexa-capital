@@ -29,14 +29,26 @@ async def test_sensors_created_and_weighted(hass, mock_entry, sample_snapshot):
     mock_entry.add_to_hass(hass)
     coordinator = IndexaPortfolioCoordinator(hass, mock_entry, FakeClient(sample_snapshot))
     await coordinator.async_initialize()
-    account_sensor = IndexaAccountSensor(
+    contribution_sensor = IndexaAccountSensor(
         coordinator,
         mock_entry,
         "ACC1",
         ACCOUNT_SENSORS[0],
     )
-    aggregate_sensor = IndexaAggregateSensor(coordinator, mock_entry, AGGREGATE_SENSORS[1])
+    account_sensor = IndexaAccountSensor(
+        coordinator,
+        mock_entry,
+        "ACC1",
+        ACCOUNT_SENSORS[1],
+    )
+    total_contribution_sensor = IndexaAggregateSensor(
+        coordinator, mock_entry, AGGREGATE_SENSORS[0]
+    )
+    aggregate_sensor = IndexaAggregateSensor(coordinator, mock_entry, AGGREGATE_SENSORS[2])
 
+    assert contribution_sensor.native_value == 1000.0
+    assert contribution_sensor.native_unit_of_measurement == "EUR"
     assert account_sensor.native_value == 50.0
     assert account_sensor.native_unit_of_measurement == "EUR"
+    assert total_contribution_sensor.native_value == 4000.0
     assert aggregate_sensor.native_value == pytest.approx(3.5)

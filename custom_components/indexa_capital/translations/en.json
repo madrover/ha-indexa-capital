@@ -40,11 +40,17 @@
   },
   "entity": {
     "sensor": {
+      "contributions_amount": {
+        "name": "Contributions amount"
+      },
       "performance_amount": {
         "name": "Performance amount"
       },
       "performance_percentage": {
         "name": "Performance percentage"
+      },
+      "total_contributions_amount": {
+        "name": "Total contributions amount"
       },
       "total_performance_amount": {
         "name": "Total performance amount"
@@ -55,4 +61,3 @@
     }
   }
 }
-

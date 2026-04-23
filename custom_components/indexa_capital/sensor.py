@@ -38,6 +38,14 @@ class IndexaSensorEntityDescription(SensorEntityDescription):
 
 ACCOUNT_SENSORS = (
     IndexaSensorEntityDescription(
+        key="contributions_amount",
+        translation_key="contributions_amount",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        value_fn=lambda account, coordinator: account.invested_amount,
+    ),
+    IndexaSensorEntityDescription(
         key="performance_amount",
         translation_key="performance_amount",
         device_class=SensorDeviceClass.MONETARY,
@@ -56,6 +64,14 @@ ACCOUNT_SENSORS = (
 )
 
 AGGREGATE_SENSORS = (
+    IndexaSensorEntityDescription(
+        key="total_contributions_amount",
+        translation_key="total_contributions_amount",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        value_fn=lambda snapshot, coordinator: snapshot.total_contributions_amount,
+    ),
     IndexaSensorEntityDescription(
         key="total_performance_amount",
         translation_key="total_performance_amount",

@@ -47,6 +47,11 @@ class IndexaPortfolioSnapshot:
         return sum(account.invested_amount for account in self.accounts)
 
     @property
+    def total_contributions_amount(self) -> float:
+        """Return total contributions amount."""
+        return self.total_invested_amount
+
+    @property
     def total_performance_percentage(self) -> float:
         """Return weighted total performance percentage."""
         total_invested = self.total_invested_amount
