@@ -1,0 +1,58 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Indexa Capital",
+        "description": "Enter your Indexa API token.",
+        "data": {
+          "api_token": "API token"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect Indexa Capital",
+        "description": "Update the API token for this Indexa Capital connection.",
+        "data": {
+          "api_token": "API token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to Indexa Capital.",
+      "invalid_auth": "Invalid API token."
+    },
+    "abort": {
+      "already_configured": "This Indexa Capital token is already configured.",
+      "reauth_successful": "Reauthentication completed."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Indexa Capital options",
+        "data": {
+          "notify_service": "Notify service",
+          "refresh_start_time": "Refresh start time",
+          "refresh_end_time": "Refresh end time",
+          "refresh_interval_minutes": "Retry interval (minutes)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "performance_amount": {
+        "name": "Performance amount"
+      },
+      "performance_percentage": {
+        "name": "Performance percentage"
+      },
+      "total_performance_amount": {
+        "name": "Total performance amount"
+      },
+      "total_performance_percentage": {
+        "name": "Total performance percentage"
+      }
+    }
+  }
+}
+

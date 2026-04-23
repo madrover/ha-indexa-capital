@@ -1,0 +1,12 @@
+{
+  "domain": "indexa_capital",
+  "name": "Indexa Capital",
+  "codeowners": ["@madrover"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/madrover/ha-indexa-capital#readme",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/madrover/ha-indexa-capital/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
