@@ -1,9 +1,7 @@
 {
   "name": "Indexa Capital",
   "content_in_root": false,
-  "domains": ["indexa_capital"],
   "country": ["ES"],
   "homeassistant": "2025.1.0",
   "render_readme": true
 }
-
