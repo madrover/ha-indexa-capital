@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import time
+
 from homeassistant.const import CONF_API_TOKEN
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.indexa_capital.api import IndexaAuthError, fingerprint_token
-from custom_components.indexa_capital.const import DOMAIN
+from custom_components.indexa_capital.const import (
+    CONF_REFRESH_END_TIME,
+    CONF_REFRESH_INTERVAL_MINUTES,
+    CONF_REFRESH_START_TIME,
+    DOMAIN,
+)
 
 
 async def test_user_flow_success(hass, monkeypatch):
@@ -121,3 +128,41 @@ async def test_reauth_updates_token(hass, mock_entry, monkeypatch):
         hass.config_entries.async_get_entry(mock_entry.entry_id).data[CONF_API_TOKEN]
         == "new-token"
     )
+
+
+async def test_options_flow_serializes_time_defaults(hass, mock_entry):
+    """Options form should expose time defaults in a frontend-safe format."""
+
+    mock_entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(mock_entry.entry_id)
+
+    assert result["type"] is FlowResultType.FORM
+    start_key = next(
+        key for key in result["data_schema"].schema if key.schema == CONF_REFRESH_START_TIME
+    )
+    end_key = next(
+        key for key in result["data_schema"].schema if key.schema == CONF_REFRESH_END_TIME
+    )
+    assert start_key.default() == "08:00:00"
+    assert end_key.default() == "11:00:00"
+
+
+async def test_options_flow_updates_schedule(hass, mock_entry):
+    """Options flow should save edited schedule values."""
+
+    mock_entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(mock_entry.entry_id)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_REFRESH_START_TIME: "09:15:00",
+            CONF_REFRESH_END_TIME: time(hour=12, minute=30),
+            CONF_REFRESH_INTERVAL_MINUTES: 10,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_REFRESH_START_TIME] == "09:15:00"
+    assert result["data"][CONF_REFRESH_END_TIME] == time(hour=12, minute=30)
+    assert result["data"][CONF_REFRESH_INTERVAL_MINUTES] == 10

@@ -2,6 +2,8 @@
 
 `indexa_capital` is a HACS-ready custom integration that tracks Indexa Capital portfolio performance inside Home Assistant.
 
+Tested with Home Assistant `2026.4.3`. Earlier Home Assistant versions may work, but they are not officially verified.
+
 ## Features
 
 - Authenticates with an Indexa API token

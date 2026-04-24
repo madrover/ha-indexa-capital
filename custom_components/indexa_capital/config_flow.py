@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import time
 from typing import Any
 
 import voluptuous as vol
@@ -117,7 +118,7 @@ class IndexaCapitalOptionsFlow(config_entries.OptionsFlow):
     """Handle Indexa Capital options."""
 
     def __init__(self, config_entry) -> None:
-        self.config_entry = config_entry
+        self._config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage integration options."""
@@ -130,26 +131,37 @@ class IndexaCapitalOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Optional(
                         CONF_NOTIFY_SERVICE,
-                        default=self.config_entry.options.get(CONF_NOTIFY_SERVICE, ""),
+                        default=self._config_entry.options.get(CONF_NOTIFY_SERVICE, ""),
                     ): str,
                     vol.Required(
                         CONF_REFRESH_START_TIME,
-                        default=self.config_entry.options.get(
-                            CONF_REFRESH_START_TIME, DEFAULT_REFRESH_START_TIME
+                        default=_serialize_time_selector_value(
+                            self._config_entry.options.get(
+                                CONF_REFRESH_START_TIME, DEFAULT_REFRESH_START_TIME
+                            )
                         ),
                     ): selector.TimeSelector(),
                     vol.Required(
                         CONF_REFRESH_END_TIME,
-                        default=self.config_entry.options.get(
-                            CONF_REFRESH_END_TIME, DEFAULT_REFRESH_END_TIME
+                        default=_serialize_time_selector_value(
+                            self._config_entry.options.get(
+                                CONF_REFRESH_END_TIME, DEFAULT_REFRESH_END_TIME
+                            )
                         ),
                     ): selector.TimeSelector(),
                     vol.Required(
                         CONF_REFRESH_INTERVAL_MINUTES,
-                        default=self.config_entry.options.get(
+                        default=self._config_entry.options.get(
                             CONF_REFRESH_INTERVAL_MINUTES, DEFAULT_REFRESH_INTERVAL_MINUTES
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1)),
                 }
             ),
         )
+
+
+def _serialize_time_selector_value(value: time | str) -> str:
+    """Return a frontend-safe default value for a time selector."""
+    if isinstance(value, str):
+        return value
+    return value.isoformat()
