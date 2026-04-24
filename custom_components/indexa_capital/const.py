@@ -21,9 +21,13 @@ DATA_COORDINATOR = "coordinator"
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}_state"
 
+SERVICE_BACKFILL_STATISTICS = "backfill_statistics"
+SERVICE_ATTR_ENTRY_ID = "entry_id"
+SERVICE_ATTR_START_DATE = "start_date"
+SERVICE_ATTR_END_DATE = "end_date"
+
 ATTR_ACCOUNT_NUMBER = "account_number"
 ATTR_LATEST_HISTORY_DATE = "latest_history_date"
 ATTR_INVESTED_AMOUNT = "invested_amount"
 
 AGGREGATE_DEVICE_ID = "portfolio_total"
-

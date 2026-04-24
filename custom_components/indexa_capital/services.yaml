@@ -1,0 +1,22 @@
+backfill_statistics:
+  name: Backfill statistics
+  description: Import historical Indexa daily metrics into Home Assistant Recorder statistics.
+  fields:
+    entry_id:
+      name: Config entry ID
+      description: Backfill a single Indexa Capital config entry. Omit to backfill all configured entries.
+      example: "01HXYZABCDEF1234567890"
+      selector:
+        text:
+    start_date:
+      name: Start date
+      description: Only import historical data on or after this date.
+      example: "2026-04-01"
+      selector:
+        date:
+    end_date:
+      name: End date
+      description: Only import historical data on or before this date.
+      example: "2026-04-21"
+      selector:
+        date:
