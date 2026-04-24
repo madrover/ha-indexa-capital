@@ -10,6 +10,7 @@ from homeassistant.helpers import entity_registry as er
 
 from custom_components.indexa_capital import backfill
 from custom_components.indexa_capital.backfill import (
+    _normalize_statistic_start,
     async_backfill_entry_statistics,
     async_register_services,
 )
@@ -46,6 +47,10 @@ class FakeRecorder:
 
     async def async_block_till_done(self) -> None:
         """Mirror the recorder API used by the integration."""
+
+    async def async_add_executor_job(self, target, *args):
+        """Mirror the recorder executor helper used by the integration."""
+        return target(*args)
 
 
 def _history_snapshot() -> IndexaPortfolioSnapshot:
@@ -178,3 +183,8 @@ async def test_backfill_service_honors_date_filters(hass, mock_entry, monkeypatc
 
     account_means = [row["mean"] for row in recorder.imported_rows[account_entry.entity_id]]
     assert account_means == pytest.approx([10.0, 20.0])
+
+
+def test_normalize_statistic_start_accepts_float_timestamp():
+    """Recorder start values may come back as UNIX timestamps."""
+    assert _normalize_statistic_start(1776988800.0) == "2026-04-24T00:00:00+00:00"

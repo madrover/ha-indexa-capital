@@ -16,6 +16,7 @@ from homeassistant.components.recorder.statistics import (
     get_metadata,
     statistics_during_period,
 )
+from homeassistant.components.sensor import SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
@@ -157,7 +158,8 @@ async def async_backfill_entry_statistics(
         coordinator,
         snapshot,
         entity_entries,
-        await hass.async_add_executor_job(
+        await _async_recorder_executor_job(
+            hass,
             _get_existing_metadata,
             hass,
             {registry_entry.entity_id for registry_entry in entity_entries.values()},
@@ -172,7 +174,8 @@ async def async_backfill_entry_statistics(
         if not statistic_rows:
             continue
 
-        existing_starts = await hass.async_add_executor_job(
+        existing_starts = await _async_recorder_executor_job(
+            hass,
             _existing_statistic_starts,
             hass,
             metadata["statistic_id"],
@@ -213,6 +216,7 @@ def _build_statistics_payloads(
     """Build Recorder statistics payloads for all known Indexa sensor entities."""
     metric_rows: dict[str, list[dict[str, Any]]] = {}
     metric_metadata: dict[str, dict[str, Any]] = {}
+    metric_initial_values: dict[str, float] = {}
 
     for history_date in snapshot.history_dates():
         parsed_date = date.fromisoformat(history_date)
@@ -240,10 +244,21 @@ def _build_statistics_payloads(
                 unit = description.native_unit_of_measurement or account.currency
                 metric_metadata.setdefault(
                     registry_entry.entity_id,
-                    _build_statistic_metadata(registry_entry, unit, existing_metadata),
+                    _build_statistic_metadata(
+                        registry_entry,
+                        unit,
+                        description.state_class,
+                        existing_metadata,
+                    ),
                 )
                 metric_rows.setdefault(registry_entry.entity_id, []).append(
-                    _build_statistic_row(statistic_start, float(value))
+                    _build_statistic_row(
+                        statistic_start,
+                        float(value),
+                        description.state_class,
+                        metric_initial_values,
+                        registry_entry.entity_id,
+                    )
                 )
 
         for description in AGGREGATE_SENSORS:
@@ -257,10 +272,21 @@ def _build_statistics_payloads(
             unit = description.native_unit_of_measurement or dated_snapshot.currency
             metric_metadata.setdefault(
                 registry_entry.entity_id,
-                _build_statistic_metadata(registry_entry, unit, existing_metadata),
+                _build_statistic_metadata(
+                    registry_entry,
+                    unit,
+                    description.state_class,
+                    existing_metadata,
+                ),
             )
             metric_rows.setdefault(registry_entry.entity_id, []).append(
-                _build_statistic_row(statistic_start, float(value))
+                _build_statistic_row(
+                    statistic_start,
+                    float(value),
+                    description.state_class,
+                    metric_initial_values,
+                    registry_entry.entity_id,
+                )
             )
 
     return [
@@ -272,6 +298,7 @@ def _build_statistics_payloads(
 def _build_statistic_metadata(
     registry_entry: er.RegistryEntry,
     unit_of_measurement: str,
+    state_class: SensorStateClass | str | None,
     existing_metadata: dict[str, tuple[int, dict[str, Any]]],
 ) -> dict[str, Any]:
     """Build Recorder statistic metadata for an entity."""
@@ -279,9 +306,10 @@ def _build_statistic_metadata(
         _metadata_id, metadata = existing_metadata[registry_entry.entity_id]
         return dict(metadata)
 
+    is_total_sensor = state_class == SensorStateClass.TOTAL
     return {
-        "has_sum": False,
-        "mean_type": StatisticMeanType.ARITHMETIC,
+        "has_sum": is_total_sensor,
+        "mean_type": StatisticMeanType.NONE if is_total_sensor else StatisticMeanType.ARITHMETIC,
         "name": registry_entry.original_name or registry_entry.entity_id,
         "source": RECORDER_DOMAIN,
         "statistic_id": registry_entry.entity_id,
@@ -290,8 +318,22 @@ def _build_statistic_metadata(
     }
 
 
-def _build_statistic_row(start: datetime, value: float) -> dict[str, Any]:
-    """Build a Recorder statistic row for a measurement sensor."""
+def _build_statistic_row(
+    start: datetime,
+    value: float,
+    state_class: SensorStateClass | str | None,
+    initial_values: dict[str, float],
+    entity_id: str,
+) -> dict[str, Any]:
+    """Build a Recorder statistic row appropriate for the sensor state class."""
+    if state_class == SensorStateClass.TOTAL:
+        initial_value = initial_values.setdefault(entity_id, value)
+        return {
+            "start": start,
+            "state": value,
+            "sum": value - initial_value,
+        }
+
     return {
         "start": start,
         "mean": value,
@@ -317,7 +359,7 @@ def _existing_statistic_starts(
         {"mean"},
     )
     return {
-        row["start"].isoformat()
+        _normalize_statistic_start(row["start"])
         for row in existing_rows.get(statistic_id, [])
         if "start" in row
     }
@@ -328,3 +370,20 @@ def _get_existing_metadata(
 ) -> dict[str, tuple[int, dict[str, Any]]]:
     """Fetch existing Recorder metadata for the requested statistic IDs."""
     return get_metadata(hass, statistic_ids=statistic_ids)
+
+
+def _normalize_statistic_start(raw_start: Any) -> str:
+    """Normalize recorder start values to a comparable ISO timestamp."""
+    if isinstance(raw_start, datetime):
+        return raw_start.isoformat()
+    if isinstance(raw_start, (int, float)):
+        return datetime.fromtimestamp(raw_start, tz=UTC).isoformat()
+    return str(raw_start)
+
+
+async def _async_recorder_executor_job(hass: HomeAssistant, target, *args: Any) -> Any:
+    """Run a Recorder-related database function in the appropriate executor."""
+    recorder_instance = get_instance(hass)
+    if hasattr(recorder_instance, "async_add_executor_job"):
+        return await recorder_instance.async_add_executor_job(target, *args)
+    return await hass.async_add_executor_job(target, *args)
