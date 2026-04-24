@@ -10,6 +10,7 @@ API documentation: https://indexacapital.com/en/api-rest-v1
 - Discovers all accounts tied to the token automatically
 - Creates per-account performance sensors in money and percentage
 - Creates aggregate portfolio performance sensors
+- Supports a manual Recorder statistics backfill for historical daily data
 - Runs a daily refresh window from `08:00` to `11:00` local time with 15 minute retries until fresh data appears
 - Sends a Home Assistant notification once fresh data is detected for the day
 
@@ -26,6 +27,19 @@ You can also install manually by copying `custom_components/indexa_capital` into
 ## Data model
 
 The integration uses the latest performance-history date returned by Indexa to decide whether new daily data is available. If no new data arrives before the configured end time, the previous successful snapshot remains available and graphable.
+
+Historical data before installation is not imported automatically. To backfill previous Indexa daily data into Home Assistant Recorder statistics, call the `indexa_capital.backfill_statistics` service after setup.
+
+Example service call:
+
+```yaml
+service: indexa_capital.backfill_statistics
+data:
+  start_date: "2026-04-01"
+  end_date: "2026-04-21"
+```
+
+This backfills long-term statistics for the existing Indexa sensor entities so charts can include earlier daily points.
 
 ## API reference
 

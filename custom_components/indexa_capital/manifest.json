@@ -1,6 +1,7 @@
 {
   "domain": "indexa_capital",
   "name": "Indexa Capital",
+  "after_dependencies": ["recorder"],
   "codeowners": ["@madrover"],
   "config_flow": true,
   "dependencies": [],
