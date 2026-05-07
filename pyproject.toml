@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ha-indexa-capital"
-version = "0.1.0"
+version = "0.2.0"
 description = "Home Assistant custom integration for Indexa Capital daily performance tracking"
 requires-python = ">=3.12"
 
