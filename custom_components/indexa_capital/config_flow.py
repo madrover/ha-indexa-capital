@@ -123,40 +123,64 @@ class IndexaCapitalOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage integration options."""
         if user_input is not None:
+            start_time = _coerce_time_selector_value(user_input[CONF_REFRESH_START_TIME])
+            end_time = _coerce_time_selector_value(user_input[CONF_REFRESH_END_TIME])
+            if end_time <= start_time:
+                return self.async_show_form(
+                    step_id="init",
+                    data_schema=self._build_options_schema(user_input),
+                    errors={"base": "invalid_refresh_window"},
+                )
             return self.async_create_entry(data=user_input)
 
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
+        return self.async_show_form(step_id="init", data_schema=self._build_options_schema())
+
+    def _build_options_schema(self, user_input: dict[str, Any] | None = None) -> vol.Schema:
+        """Build the options form schema."""
+        source = user_input or self._config_entry.options
+        return vol.Schema(
+            {
+                vol.Optional(
+                    CONF_NOTIFY_SERVICE,
+                    default=source.get(
                         CONF_NOTIFY_SERVICE,
-                        default=self._config_entry.options.get(CONF_NOTIFY_SERVICE, ""),
-                    ): str,
-                    vol.Required(
-                        CONF_REFRESH_START_TIME,
-                        default=_serialize_time_selector_value(
+                        self._config_entry.options.get(CONF_NOTIFY_SERVICE, ""),
+                    ),
+                ): str,
+                vol.Required(
+                    CONF_REFRESH_START_TIME,
+                    default=_serialize_time_selector_value(
+                        source.get(
+                            CONF_REFRESH_START_TIME,
                             self._config_entry.options.get(
-                                CONF_REFRESH_START_TIME, DEFAULT_REFRESH_START_TIME
+                                CONF_REFRESH_START_TIME,
+                                DEFAULT_REFRESH_START_TIME,
                             )
-                        ),
-                    ): selector.TimeSelector(),
-                    vol.Required(
-                        CONF_REFRESH_END_TIME,
-                        default=_serialize_time_selector_value(
+                        )
+                    ),
+                ): selector.TimeSelector(),
+                vol.Required(
+                    CONF_REFRESH_END_TIME,
+                    default=_serialize_time_selector_value(
+                        source.get(
+                            CONF_REFRESH_END_TIME,
                             self._config_entry.options.get(
-                                CONF_REFRESH_END_TIME, DEFAULT_REFRESH_END_TIME
+                                CONF_REFRESH_END_TIME,
+                                DEFAULT_REFRESH_END_TIME,
                             )
-                        ),
-                    ): selector.TimeSelector(),
-                    vol.Required(
+                        )
+                    ),
+                ): selector.TimeSelector(),
+                vol.Required(
+                    CONF_REFRESH_INTERVAL_MINUTES,
+                    default=source.get(
                         CONF_REFRESH_INTERVAL_MINUTES,
-                        default=self._config_entry.options.get(
+                        self._config_entry.options.get(
                             CONF_REFRESH_INTERVAL_MINUTES, DEFAULT_REFRESH_INTERVAL_MINUTES
                         ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1)),
-                }
-            ),
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1)),
+            }
         )
 
 
@@ -165,3 +189,10 @@ def _serialize_time_selector_value(value: time | str) -> str:
     if isinstance(value, str):
         return value
     return value.isoformat()
+
+
+def _coerce_time_selector_value(value: time | str) -> time:
+    """Normalize a time-selector value into a `time` object."""
+    if isinstance(value, time):
+        return value
+    return time.fromisoformat(value)

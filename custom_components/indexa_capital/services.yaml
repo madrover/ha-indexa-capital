@@ -20,3 +20,26 @@ backfill_statistics:
       example: "2026-04-21"
       selector:
         date:
+
+send_test_notification:
+  name: Send test notification
+  description: Send a test notification using the notify service configured in the Indexa Capital options.
+  fields:
+    entry_id:
+      name: Config entry ID
+      description: Target a single Indexa Capital config entry. Omit when only one entry is configured.
+      example: "01HXYZABCDEF1234567890"
+      selector:
+        text:
+    title:
+      name: Title
+      description: Optional notification title override.
+      example: "Indexa Capital"
+      selector:
+        text:
+    message:
+      name: Message
+      description: Optional notification message override.
+      example: "Test notification from Indexa Capital."
+      selector:
+        text:

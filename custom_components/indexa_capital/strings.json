@@ -2,68 +2,58 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect Indexa Capital",
-        "description": "Enter your Indexa API token.",
+        "title": "Indexa Capital",
+        "description": "Set up your Indexa Capital integration.",
         "data": {
-          "api_token": "API token"
+          "api_token": "API Token"
         }
       },
       "reauth_confirm": {
-        "title": "Reconnect Indexa Capital",
-        "description": "Update the API token for this Indexa Capital connection.",
+        "title": "Reauthenticate Indexa Capital",
+        "description": "The API token is no longer valid. Please enter a new token.",
         "data": {
-          "api_token": "API token"
+          "api_token": "API Token"
         }
       }
     },
     "error": {
-      "cannot_connect": "Unable to connect to Indexa Capital.",
-      "invalid_auth": "Invalid API token."
+      "cannot_connect": "Failed to connect to Indexa Capital API.",
+      "invalid_auth": "Invalid API token.",
+      "unknown": "Unexpected error occurred."
     },
     "abort": {
-      "already_configured": "This Indexa Capital token is already configured.",
-      "reauth_successful": "Reauthentication completed."
+      "already_configured": "Device is already configured",
+      "reauth_successful": "Re-authentication was successful"
     }
   },
   "options": {
+    "error": {
+      "invalid_refresh_window": "Refresh end time must be later than refresh start time."
+    },
     "step": {
       "init": {
-        "title": "Indexa Capital options",
+        "title": "Indexa Capital Options",
+        "description": "Configure portfolio refresh schedule and notifications.",
         "data": {
-          "notify_service": "Notify service",
-          "refresh_start_time": "Refresh start time",
-          "refresh_end_time": "Refresh end time",
-          "refresh_interval_minutes": "Retry interval (minutes)"
+          "notify_service": "Notification service for updates (e.g., notify.mobile_app_iphone)",
+          "refresh_start_time": "Start checking for updates at",
+          "refresh_end_time": "Stop checking for updates at",
+          "refresh_interval_minutes": "Check interval (minutes)"
+        },
+        "data_description": {
+          "notify_service": "Enter a notify service like 'notify.mobile_app_yourphone' or leave empty to disable notifications. Find your notify service in Settings > Devices & Services > Mobile App."
         }
       }
     }
   },
-  "entity": {
-    "sensor": {
-      "contributions_amount": {
-        "name": "Contributions amount"
-      },
-      "performance_amount": {
-        "name": "Performance amount"
-      },
-      "performance_percentage": {
-        "name": "Time-weighted performance percentage"
-      },
-      "money_weighted_performance_percentage": {
-        "name": "Money-weighted performance percentage"
-      },
-      "total_contributions_amount": {
-        "name": "Total contributions amount"
-      },
-      "total_performance_amount": {
-        "name": "Total performance amount"
-      },
-      "total_performance_percentage": {
-        "name": "Total time-weighted performance percentage"
-      },
-      "total_money_weighted_performance_percentage": {
-        "name": "Total money-weighted performance percentage"
-      }
+  "services": {
+    "backfill_statistics": {
+      "name": "Backfill Statistics",
+      "description": "Backfill historical portfolio data for long-term statistics."
+    },
+    "send_test_notification": {
+      "name": "Send Test Notification",
+      "description": "Send a test notification using the notify service configured for this Indexa Capital integration."
     }
   }
 }

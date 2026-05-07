@@ -144,7 +144,7 @@ async def test_options_flow_serializes_time_defaults(hass, mock_entry):
         key for key in result["data_schema"].schema if key.schema == CONF_REFRESH_END_TIME
     )
     assert start_key.default() == "08:00:00"
-    assert end_key.default() == "11:00:00"
+    assert end_key.default() == "13:00:00"
 
 
 async def test_options_flow_updates_schedule(hass, mock_entry):
@@ -166,3 +166,22 @@ async def test_options_flow_updates_schedule(hass, mock_entry):
     assert result["data"][CONF_REFRESH_START_TIME] == "09:15:00"
     assert result["data"][CONF_REFRESH_END_TIME] == time(hour=12, minute=30)
     assert result["data"][CONF_REFRESH_INTERVAL_MINUTES] == 10
+
+
+async def test_options_flow_rejects_invalid_refresh_window(hass, mock_entry):
+    """Options flow should reject a refresh window whose end is not after start."""
+
+    mock_entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(mock_entry.entry_id)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_REFRESH_START_TIME: "09:15:00",
+            CONF_REFRESH_END_TIME: time(hour=0, minute=0),
+            CONF_REFRESH_INTERVAL_MINUTES: 10,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_refresh_window"}

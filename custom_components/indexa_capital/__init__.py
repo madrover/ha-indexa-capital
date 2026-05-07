@@ -8,9 +8,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import IndexaApiClient
-from .backfill import async_register_services, async_unregister_services
+from .backfill import async_register_services as async_register_backfill_services
+from .backfill import async_unregister_services as async_unregister_backfill_services
 from .const import DATA_CLIENT, DATA_COORDINATOR, DOMAIN
 from .coordinator import IndexaPortfolioCoordinator
+from .services import async_register_services as async_register_general_services
+from .services import async_unregister_services as async_unregister_general_services
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
@@ -29,7 +32,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         DATA_CLIENT: client,
         DATA_COORDINATOR: coordinator,
     }
-    async_register_services(hass)
+    async_register_backfill_services(hass)
+    async_register_general_services(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
@@ -46,7 +50,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await coordinator.async_shutdown()
         hass.data[DOMAIN].pop(entry.entry_id)
         if not hass.data[DOMAIN]:
-            await async_unregister_services(hass)
+            await async_unregister_backfill_services(hass)
+            await async_unregister_general_services(hass)
             hass.data.pop(DOMAIN)
     return unload_ok
 

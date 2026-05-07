@@ -26,6 +26,9 @@
     }
   },
   "options": {
+    "error": {
+      "invalid_refresh_window": "Refresh end time must be later than refresh start time."
+    },
     "step": {
       "init": {
         "title": "Indexa Capital options",
@@ -64,6 +67,16 @@
       "total_money_weighted_performance_percentage": {
         "name": "Total money-weighted performance percentage"
       }
+    }
+  },
+  "services": {
+    "backfill_statistics": {
+      "name": "Backfill statistics",
+      "description": "Backfill historical portfolio data for long-term statistics."
+    },
+    "send_test_notification": {
+      "name": "Send test notification",
+      "description": "Send a test notification using the notify service configured for this Indexa Capital integration."
     }
   }
 }

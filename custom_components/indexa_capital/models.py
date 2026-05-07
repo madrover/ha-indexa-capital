@@ -360,7 +360,15 @@ class IndexaRuntimeState:
     """Persisted scheduler state."""
 
     last_fresh_date: str | None = None
+    last_refresh_check_at: str | None = None
+    last_refresh_check_trigger: str | None = None
+    last_refresh_check_latest_history_date: str | None = None
+    last_refresh_check_outcome: str | None = None
+    last_refresh_check_error: str | None = None
     last_notification_date: str | None = None
+    last_notification_attempt_at: str | None = None
+    last_notification_success_at: str | None = None
+    last_notification_error: str | None = None
     last_successful_refresh_date: str | None = None
     awaiting_fresh_data: bool = False
 
