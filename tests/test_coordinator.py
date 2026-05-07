@@ -130,10 +130,45 @@ async def test_notification_failure_does_not_undo_refresh_state(hass, mock_entry
     assert coordinator.runtime_state.last_fresh_date == "2026-04-22"
     assert coordinator.runtime_state.awaiting_fresh_data is False
     assert coordinator.runtime_state.last_notification_date is None
+    assert coordinator.runtime_state.last_notification_attempt_at is not None
+    assert coordinator.runtime_state.last_notification_success_at is None
+    assert coordinator.runtime_state.last_notification_error == "notify failed"
     assert (
         coordinator._store.payload["runtime_state"]["last_successful_refresh_date"]
         == "2026-04-22"
     )
+
+
+async def test_notification_success_records_runtime_state(hass, mock_entry, sample_snapshot):
+    """A successful notify call should record notification status."""
+    mock_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_entry,
+        options={
+            **mock_entry.options,
+            CONF_NOTIFY_SERVICE: "notify.mobile_app_iphone",
+        },
+    )
+    client = FakeClient([sample_snapshot, sample_snapshot])
+    coordinator = IndexaPortfolioCoordinator(hass, mock_entry, client)
+    coordinator._store = FakeStore()
+    coordinator._local_now = lambda: datetime(2026, 4, 22, 7, 0, tzinfo=ZoneInfo("Europe/Madrid"))
+    await coordinator.async_initialize()
+    coordinator._local_now = lambda: datetime(2026, 4, 22, 8, 0, tzinfo=ZoneInfo("Europe/Madrid"))
+    coordinator.runtime_state.last_fresh_date = "2026-04-21"
+    coordinator.runtime_state.awaiting_fresh_data = True
+
+    async def _notify(call):
+        return None
+
+    hass.services.async_register("notify", "mobile_app_iphone", _notify)
+
+    await coordinator._async_attempt_refresh("test")
+
+    assert coordinator.runtime_state.last_notification_date == "2026-04-22"
+    assert coordinator.runtime_state.last_notification_attempt_at is not None
+    assert coordinator.runtime_state.last_notification_success_at is not None
+    assert coordinator.runtime_state.last_notification_error is None
 
 
 async def test_initialize_uses_stored_snapshot_on_transient_api_failure(

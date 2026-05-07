@@ -65,5 +65,15 @@
         "name": "Total money-weighted performance percentage"
       }
     }
+  },
+  "services": {
+    "backfill_statistics": {
+      "name": "Backfill statistics",
+      "description": "Backfill historical portfolio data for long-term statistics."
+    },
+    "send_test_notification": {
+      "name": "Send test notification",
+      "description": "Send a test notification using the notify service configured for this Indexa Capital integration."
+    }
   }
 }

@@ -237,9 +237,19 @@ class IndexaAggregateSensor(IndexaBaseSensor):
         """Return aggregate metadata."""
         latest_date = self.coordinator.data.latest_history_date if self.coordinator.data else None
         total_invested = self.coordinator.data.total_invested_amount if self.coordinator.data else 0
+        runtime_state = self.coordinator.runtime_state
         return {
             ATTR_INVESTED_AMOUNT: total_invested,
             ATTR_LATEST_HISTORY_DATE: latest_date.isoformat() if latest_date else None,
+            "notify_service": self.coordinator.notify_service,
+            "notification_configured": self.coordinator.notification_configured,
+            "last_fresh_date": runtime_state.last_fresh_date,
+            "last_successful_refresh_date": runtime_state.last_successful_refresh_date,
+            "last_notification_date": runtime_state.last_notification_date,
+            "last_notification_attempt_at": runtime_state.last_notification_attempt_at,
+            "last_notification_success_at": runtime_state.last_notification_success_at,
+            "last_notification_error": runtime_state.last_notification_error,
+            "awaiting_fresh_data": runtime_state.awaiting_fresh_data,
         }
 
     @property

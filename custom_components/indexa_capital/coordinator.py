@@ -109,6 +109,11 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
             }
         )
 
+    async def async_record_runtime_state_change(self) -> None:
+        """Persist runtime-only changes and refresh listeners."""
+        await self._async_save_state()
+        self.async_update_listeners()
+
     @property
     def refresh_start_time(self):
         """Return the configured refresh start time."""
@@ -138,19 +143,24 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
         value = self.config_entry.options.get(CONF_NOTIFY_SERVICE)
         return str(value) if value else None
 
+    @property
+    def notification_configured(self) -> bool:
+        """Return whether notification delivery is configured."""
+        return bool(self.notify_service)
+
     async def _async_resume_if_needed(self) -> None:
         """Resume retry behavior after a Home Assistant restart."""
         today = self._local_now().date().isoformat()
         if self.runtime_state.last_successful_refresh_date == today:
             self.runtime_state.awaiting_fresh_data = False
-            await self._async_save_state()
+            await self.async_record_runtime_state_change()
             return
         if not self._is_within_refresh_window():
             self.runtime_state.awaiting_fresh_data = False
-            await self._async_save_state()
+            await self.async_record_runtime_state_change()
             return
         self.runtime_state.awaiting_fresh_data = True
-        await self._async_save_state()
+        await self.async_record_runtime_state_change()
         self._schedule_window_end()
         await self._async_attempt_refresh("startup_resume")
         if self.runtime_state.awaiting_fresh_data:
@@ -220,7 +230,7 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
         today = self._local_now().date().isoformat()
         if self.runtime_state.last_successful_refresh_date != today:
             self.runtime_state.awaiting_fresh_data = True
-            await self._async_save_state()
+            await self.async_record_runtime_state_change()
         self._schedule_window_end()
         await self._async_attempt_refresh("window_start")
         if self.runtime_state.awaiting_fresh_data:
@@ -235,7 +245,7 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
     async def _async_handle_window_end(self) -> None:
         self.runtime_state.awaiting_fresh_data = False
         self._cancel_retry()
-        await self._async_save_state()
+        await self.async_record_runtime_state_change()
 
     @callback
     def _handle_retry(self, now: datetime) -> None:
@@ -252,7 +262,7 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
         """Fetch fresh data and stop retries once a new history date appears."""
         if not self._is_within_refresh_window():
             self.runtime_state.awaiting_fresh_data = False
-            await self._async_save_state()
+            await self.async_record_runtime_state_change()
             return
 
         try:
@@ -289,30 +299,54 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
         if not self.notify_service or self.runtime_state.last_notification_date == today:
             return
 
-        if "." not in self.notify_service:
+        try:
+            await self.async_send_notification(
+                title="Indexa Capital",
+                message=f"Daily portfolio refresh completed for {latest_date.isoformat()}.",
+            )
+        except ValueError:
             _LOGGER.warning(
                 "Invalid notify service configured for Indexa Capital: %s",
                 self.notify_service,
             )
             return
+        except Exception as err:  # pragma: no cover - defensive HA service boundary
+            _LOGGER.warning("Indexa notification delivery failed: %s", err)
+            return
+        self.runtime_state.last_notification_date = today
+        await self.async_record_runtime_state_change()
+
+    async def async_send_notification(self, *, title: str, message: str) -> None:
+        """Send a notification through the configured notify service."""
+        attempted_at = self._local_now().isoformat()
+        self.runtime_state.last_notification_attempt_at = attempted_at
+
+        if not self.notify_service or "." not in self.notify_service:
+            self.runtime_state.last_notification_success_at = None
+            self.runtime_state.last_notification_error = "Notify service is not configured correctly."
+            await self.async_record_runtime_state_change()
+            raise ValueError("Notify service is not configured correctly.")
+
         domain, service = self.notify_service.split(".", 1)
         try:
             await self.hass.services.async_call(
                 domain,
                 service,
                 {
-                    "title": "Indexa Capital",
-                    "message": (
-                        f"Daily portfolio refresh completed for {latest_date.isoformat()}."
-                    ),
+                    "title": title,
+                    "message": message,
                 },
                 blocking=True,
             )
-        except Exception as err:  # pragma: no cover - defensive HA service boundary
-            _LOGGER.warning("Indexa notification delivery failed: %s", err)
-            return
-        self.runtime_state.last_notification_date = today
-        await self._async_save_state()
+        except Exception as err:
+            self.runtime_state.last_notification_success_at = None
+            self.runtime_state.last_notification_error = str(err)
+            await self.async_record_runtime_state_change()
+            raise
+
+        self.runtime_state.last_notification_success_at = attempted_at
+        self.runtime_state.last_notification_error = None
+        await self.async_record_runtime_state_change()
 
     def _combine_local(self, day: date, time_value) -> datetime:
         """Combine a local date and time into an aware datetime."""

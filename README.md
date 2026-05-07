@@ -13,6 +13,7 @@ Tested with Home Assistant `2026.4.3`. Earlier Home Assistant versions may work,
 - Supports a manual Recorder statistics backfill for historical daily data
 - Runs a daily refresh window from `08:00` to `11:00` local time with 15 minute retries until fresh data appears
 - Sends a Home Assistant notification once fresh data is detected for the day
+- Exposes notification debug attributes and a manual test-notification service
 
 ## Installation
 
@@ -23,6 +24,23 @@ Tested with Home Assistant `2026.4.3`. Earlier Home Assistant versions may work,
 5. Optionally configure a notify service and refresh schedule in integration options.
 
 You can also install manually by copying `custom_components/indexa_capital` into your Home Assistant `custom_components` directory.
+
+## Notifications
+
+The integration sends an automatic Home Assistant notification once it detects a fresher Indexa history date for the day. Configure the `notify_service` option in the integration settings to enable that behavior.
+
+To validate notification delivery after setup, call the `indexa_capital.send_test_notification` service from Developer Tools.
+
+Example service call:
+
+```yaml
+service: indexa_capital.send_test_notification
+data:
+  title: "Indexa Capital"
+  message: "Test notification from Indexa Capital."
+```
+
+The aggregate portfolio sensor also exposes notification debug attributes such as `notify_service`, `last_notification_attempt_at`, `last_notification_success_at`, `last_notification_error`, and `last_notification_date`.
 
 ## Data model
 

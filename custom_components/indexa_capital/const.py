@@ -22,9 +22,12 @@ STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}_state"
 
 SERVICE_BACKFILL_STATISTICS = "backfill_statistics"
+SERVICE_SEND_TEST_NOTIFICATION = "send_test_notification"
 SERVICE_ATTR_ENTRY_ID = "entry_id"
 SERVICE_ATTR_START_DATE = "start_date"
 SERVICE_ATTR_END_DATE = "end_date"
+SERVICE_ATTR_TITLE = "title"
+SERVICE_ATTR_MESSAGE = "message"
 
 ATTR_ACCOUNT_NUMBER = "account_number"
 ATTR_LATEST_HISTORY_DATE = "latest_history_date"

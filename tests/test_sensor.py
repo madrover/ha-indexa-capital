@@ -77,3 +77,37 @@ async def test_sensors_created_and_weighted(hass, mock_entry, sample_snapshot):
     assert total_contribution_sensor.native_value == 400.0
     assert total_time_weighted_sensor.native_value == pytest.approx(3.3333333333)
     assert total_money_weighted_sensor.native_value == pytest.approx(11.4730648425)
+    assert total_money_weighted_sensor.extra_state_attributes["notification_configured"] is False
+    assert (
+        total_money_weighted_sensor.extra_state_attributes["last_notification_attempt_at"] is None
+    )
+
+
+async def test_runtime_state_listener_updates_after_notification_attempt(
+    hass, mock_entry, sample_snapshot
+):
+    """Runtime-only notification state changes should notify listeners."""
+    mock_entry.add_to_hass(hass)
+    coordinator = IndexaPortfolioCoordinator(hass, mock_entry, FakeClient(sample_snapshot))
+    await coordinator.async_initialize()
+    calls = 0
+
+    def _listener() -> None:
+        nonlocal calls
+        calls += 1
+
+    remove_listener = coordinator.async_add_listener(_listener)
+
+    async def _notify(call):
+        return None
+
+    hass.config_entries.async_update_entry(
+        mock_entry,
+        options={**mock_entry.options, "notify_service": "notify.mobile_app_iphone"},
+    )
+    hass.services.async_register("notify", "mobile_app_iphone", _notify)
+
+    await coordinator.async_send_notification(title="Indexa Capital", message="Test")
+
+    remove_listener()
+    assert calls >= 1
