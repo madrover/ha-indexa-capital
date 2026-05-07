@@ -84,12 +84,14 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
             )
         else:
             self.data = snapshot
-            await self._async_accept_fresher_snapshot(
+            accepted_fresher_snapshot = await self._async_accept_fresher_snapshot(
                 snapshot,
                 trigger="startup",
                 notify=False,
                 publish_update=False,
             )
+            if accepted_fresher_snapshot and self._is_within_refresh_window():
+                await self._async_maybe_send_notification(snapshot.latest_history_date)
             await self._async_save_state()
 
         self._schedule_next_window_start()
@@ -130,17 +132,17 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
 
     @property
     def refresh_start_time(self):
-        """Return the configured refresh start time."""
-        return self._coerce_time(
-            self.config_entry.options.get(CONF_REFRESH_START_TIME, DEFAULT_REFRESH_START_TIME)
-        )
+        """Return the effective refresh start time."""
+        if self._has_valid_configured_refresh_window():
+            return self._configured_refresh_start_time
+        return DEFAULT_REFRESH_START_TIME
 
     @property
     def refresh_end_time(self):
-        """Return the configured refresh end time."""
-        return self._coerce_time(
-            self.config_entry.options.get(CONF_REFRESH_END_TIME, DEFAULT_REFRESH_END_TIME)
-        )
+        """Return the effective refresh end time."""
+        if self._has_valid_configured_refresh_window():
+            return self._configured_refresh_end_time
+        return DEFAULT_REFRESH_END_TIME
 
     @property
     def refresh_interval_minutes(self) -> int:
@@ -183,6 +185,7 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
                 },
             )
             return
+        self._log_invalid_refresh_window_fallback_if_needed("startup_resume")
         if not self._is_within_refresh_window():
             self.runtime_state.awaiting_fresh_data = False
             self._record_refresh_check(
@@ -283,6 +286,7 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
                 "refresh_interval_minutes": self.refresh_interval_minutes,
             },
         )
+        self._log_invalid_refresh_window_fallback_if_needed("window_start")
         if self.runtime_state.last_successful_refresh_date != today:
             self.runtime_state.awaiting_fresh_data = True
             await self.async_record_runtime_state_change()
@@ -591,6 +595,39 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
     def _local_now(self) -> datetime:
         """Return local now."""
         return dt_util.as_local(dt_util.now())
+
+    @property
+    def _configured_refresh_start_time(self) -> time:
+        """Return the raw configured refresh start time."""
+        return self._coerce_time(
+            self.config_entry.options.get(CONF_REFRESH_START_TIME, DEFAULT_REFRESH_START_TIME)
+        )
+
+    @property
+    def _configured_refresh_end_time(self) -> time:
+        """Return the raw configured refresh end time."""
+        return self._coerce_time(
+            self.config_entry.options.get(CONF_REFRESH_END_TIME, DEFAULT_REFRESH_END_TIME)
+        )
+
+    def _has_valid_configured_refresh_window(self) -> bool:
+        """Return whether the persisted refresh window is internally consistent."""
+        return self._configured_refresh_start_time < self._configured_refresh_end_time
+
+    def _log_invalid_refresh_window_fallback_if_needed(self, trigger: str) -> None:
+        """Warn when falling back from an invalid persisted refresh window."""
+        if self._has_valid_configured_refresh_window():
+            return
+        _LOGGER.warning(
+            "Indexa invalid refresh window configured; using defaults instead",
+            extra={
+                "trigger": trigger,
+                "configured_refresh_start_time": self._configured_refresh_start_time.isoformat(),
+                "configured_refresh_end_time": self._configured_refresh_end_time.isoformat(),
+                "effective_refresh_start_time": self.refresh_start_time.isoformat(),
+                "effective_refresh_end_time": self.refresh_end_time.isoformat(),
+            },
+        )
 
     def _is_within_refresh_window(self) -> bool:
         """Return whether the current local time is inside the refresh window."""

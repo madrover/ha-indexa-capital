@@ -12,7 +12,7 @@ CONF_REFRESH_END_TIME = "refresh_end_time"
 CONF_REFRESH_INTERVAL_MINUTES = "refresh_interval_minutes"
 
 DEFAULT_REFRESH_START_TIME = time(hour=8, minute=0)
-DEFAULT_REFRESH_END_TIME = time(hour=11, minute=0)
+DEFAULT_REFRESH_END_TIME = time(hour=13, minute=0)
 DEFAULT_REFRESH_INTERVAL_MINUTES = 15
 
 DATA_CLIENT = "client"

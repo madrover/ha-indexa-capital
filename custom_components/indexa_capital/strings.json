@@ -27,6 +27,9 @@
     }
   },
   "options": {
+    "error": {
+      "invalid_refresh_window": "Refresh end time must be later than refresh start time."
+    },
     "step": {
       "init": {
         "title": "Indexa Capital Options",

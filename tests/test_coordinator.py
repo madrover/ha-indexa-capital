@@ -10,7 +10,11 @@ import pytest
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from custom_components.indexa_capital.api import IndexaApiError, snapshot_to_dict
-from custom_components.indexa_capital.const import CONF_NOTIFY_SERVICE
+from custom_components.indexa_capital.const import (
+    CONF_NOTIFY_SERVICE,
+    CONF_REFRESH_END_TIME,
+    CONF_REFRESH_START_TIME,
+)
 from custom_components.indexa_capital.coordinator import IndexaPortfolioCoordinator
 
 
@@ -89,7 +93,7 @@ async def test_no_new_date_keeps_previous_state(hass, mock_entry, sample_snapsho
 async def test_cutoff_stops_retries(hass, mock_entry, sample_snapshot):
     """The window end should stop retries without clearing data."""
     mock_entry.add_to_hass(hass)
-    client = FakeClient([sample_snapshot])
+    client = FakeClient([sample_snapshot, sample_snapshot])
     coordinator = IndexaPortfolioCoordinator(hass, mock_entry, client)
     coordinator._local_now = lambda: datetime(
         2026, 4, 22, 7, 59, tzinfo=ZoneInfo("Europe/Madrid")
@@ -103,6 +107,67 @@ async def test_cutoff_stops_retries(hass, mock_entry, sample_snapshot):
 
     assert coordinator.runtime_state.awaiting_fresh_data is False
     assert coordinator.data == sample_snapshot
+
+
+async def test_invalid_refresh_window_falls_back_to_defaults(hass, mock_entry, sample_snapshot):
+    """An invalid configured refresh window should fall back to the default schedule."""
+    mock_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_entry,
+        options={
+            **mock_entry.options,
+            CONF_REFRESH_START_TIME: "07:30:00",
+            CONF_REFRESH_END_TIME: "00:00:00",
+        },
+    )
+    client = FakeClient([sample_snapshot, sample_snapshot])
+    coordinator = IndexaPortfolioCoordinator(hass, mock_entry, client)
+    coordinator._local_now = lambda: datetime(
+        2026, 5, 7, 8, 30, tzinfo=ZoneInfo("Europe/Madrid")
+    )
+    await coordinator.async_initialize()
+    coordinator.runtime_state.last_fresh_date = "2026-04-21"
+    coordinator.runtime_state.awaiting_fresh_data = True
+
+    await coordinator._async_attempt_refresh("window_start")
+
+    assert coordinator.refresh_start_time.isoformat() == "08:00:00"
+    assert coordinator.refresh_end_time.isoformat() == "13:00:00"
+    assert coordinator.runtime_state.last_refresh_check_trigger == "window_start"
+    assert coordinator.runtime_state.last_refresh_check_outcome == "accepted_fresher_snapshot"
+    assert coordinator.runtime_state.last_fresh_date == "2026-04-22"
+
+
+async def test_invalid_refresh_window_logs_default_fallback(hass, mock_entry, sample_snapshot, caplog):
+    """An invalid configured refresh window should emit a fallback warning."""
+    mock_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_entry,
+        options={
+            **mock_entry.options,
+            CONF_REFRESH_START_TIME: "07:30:00",
+            CONF_REFRESH_END_TIME: "00:00:00",
+        },
+    )
+    coordinator = IndexaPortfolioCoordinator(hass, mock_entry, FakeClient([sample_snapshot]))
+    coordinator._local_now = lambda: datetime(
+        2026, 5, 7, 7, 45, tzinfo=ZoneInfo("Europe/Madrid")
+    )
+
+    with caplog.at_level(logging.WARNING):
+        await coordinator._async_resume_if_needed()
+
+    fallback_record = next(
+        record
+        for record in caplog.records
+        if record.message == "Indexa invalid refresh window configured; using defaults instead"
+    )
+
+    assert fallback_record.trigger == "startup_resume"
+    assert fallback_record.configured_refresh_start_time == "07:30:00"
+    assert fallback_record.configured_refresh_end_time == "00:00:00"
+    assert fallback_record.effective_refresh_start_time == "08:00:00"
+    assert fallback_record.effective_refresh_end_time == "13:00:00"
 
 
 async def test_initialize_reconciles_fresh_runtime_state_without_notification(
@@ -132,6 +197,54 @@ async def test_initialize_reconciles_fresh_runtime_state_without_notification(
     assert coordinator.runtime_state.last_notification_attempt_at is None
     assert coordinator.runtime_state.last_refresh_check_trigger == "startup_resume"
     assert coordinator.runtime_state.last_refresh_check_outcome == "already_succeeded_today"
+
+
+async def test_initialize_notifies_when_startup_detects_fresher_data_within_window(
+    hass, mock_entry, sample_snapshot
+):
+    """Startup should notify when it is the first in-window path to detect fresher data."""
+    mock_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_entry,
+        options={
+            **mock_entry.options,
+            CONF_NOTIFY_SERVICE: "notify.mobile_app_iphone",
+        },
+    )
+    coordinator = IndexaPortfolioCoordinator(hass, mock_entry, FakeClient([sample_snapshot]))
+    coordinator._store = FakeStore(
+        {
+            "runtime_state": {
+                "last_fresh_date": "2026-04-21",
+                "last_notification_date": None,
+                "last_notification_attempt_at": None,
+                "last_notification_success_at": None,
+                "last_notification_error": None,
+                "last_successful_refresh_date": "2026-04-21",
+                "awaiting_fresh_data": False,
+            }
+        }
+    )
+    coordinator._local_now = lambda: datetime(
+        2026, 4, 22, 8, 30, tzinfo=ZoneInfo("Europe/Madrid")
+    )
+    received = {}
+
+    async def _notify(call):
+        received.update(call.data)
+
+    hass.services.async_register("notify", "mobile_app_iphone", _notify)
+
+    await coordinator.async_initialize()
+
+    assert coordinator.runtime_state.last_fresh_date == "2026-04-22"
+    assert coordinator.runtime_state.last_successful_refresh_date == "2026-04-22"
+    assert coordinator.runtime_state.last_notification_date == "2026-04-22"
+    assert coordinator.runtime_state.last_notification_success_at is not None
+    assert received == {
+        "title": "Indexa Capital",
+        "message": "Daily portfolio refresh completed for 2026-04-22.",
+    }
 
 
 async def test_initialize_keeps_runtime_state_when_startup_snapshot_is_not_fresher(

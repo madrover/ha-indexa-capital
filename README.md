@@ -11,7 +11,7 @@ Tested with Home Assistant `2026.4.3`. Earlier Home Assistant versions may work,
 - Creates per-account performance sensors in money and percentage
 - Creates aggregate portfolio performance sensors
 - Supports a manual Recorder statistics backfill for historical daily data
-- Runs a daily refresh window from `08:00` to `11:00` local time with 15 minute retries until fresh data appears
+- Runs a daily refresh window from `08:00` to `13:00` local time with 15 minute retries until fresh data appears
 - Sends a Home Assistant notification once fresh data is detected for the day
 - Exposes refresh and notification debug attributes for troubleshooting
 
