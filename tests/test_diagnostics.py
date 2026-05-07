@@ -29,3 +29,4 @@ async def test_diagnostics_redact_sensitive_fields(hass, mock_entry, sample_snap
 
     assert diagnostics["entry"]["data"]["api_token"] == "**REDACTED**"
     assert diagnostics["snapshot"]["accounts"][0]["account_number"] == "**REDACTED**"
+    assert "last_refresh_check_outcome" in diagnostics["runtime_state"]

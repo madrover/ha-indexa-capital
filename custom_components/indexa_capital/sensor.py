@@ -245,6 +245,13 @@ class IndexaAggregateSensor(IndexaBaseSensor):
             "notification_configured": self.coordinator.notification_configured,
             "last_fresh_date": runtime_state.last_fresh_date,
             "last_successful_refresh_date": runtime_state.last_successful_refresh_date,
+            "last_refresh_check_at": runtime_state.last_refresh_check_at,
+            "last_refresh_check_trigger": runtime_state.last_refresh_check_trigger,
+            "last_refresh_check_latest_history_date": (
+                runtime_state.last_refresh_check_latest_history_date
+            ),
+            "last_refresh_check_outcome": runtime_state.last_refresh_check_outcome,
+            "last_refresh_check_error": runtime_state.last_refresh_check_error,
             "last_notification_date": runtime_state.last_notification_date,
             "last_notification_attempt_at": runtime_state.last_notification_attempt_at,
             "last_notification_success_at": runtime_state.last_notification_success_at,

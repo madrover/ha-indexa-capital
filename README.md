@@ -13,7 +13,7 @@ Tested with Home Assistant `2026.4.3`. Earlier Home Assistant versions may work,
 - Supports a manual Recorder statistics backfill for historical daily data
 - Runs a daily refresh window from `08:00` to `11:00` local time with 15 minute retries until fresh data appears
 - Sends a Home Assistant notification once fresh data is detected for the day
-- Exposes notification debug attributes and a manual test-notification service
+- Exposes refresh and notification debug attributes for troubleshooting
 
 ## Installation
 
@@ -41,6 +41,8 @@ data:
 ```
 
 The aggregate portfolio sensor also exposes notification debug attributes such as `notify_service`, `last_notification_attempt_at`, `last_notification_success_at`, `last_notification_error`, and `last_notification_date`.
+
+For refresh troubleshooting, inspect aggregate sensor attributes such as `last_refresh_check_at`, `last_refresh_check_trigger`, `last_refresh_check_latest_history_date`, `last_refresh_check_outcome`, `last_refresh_check_error`, `last_fresh_date`, and `last_successful_refresh_date`.
 
 ## Data model
 

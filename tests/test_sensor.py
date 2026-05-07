@@ -81,6 +81,11 @@ async def test_sensors_created_and_weighted(hass, mock_entry, sample_snapshot):
     assert (
         total_money_weighted_sensor.extra_state_attributes["last_notification_attempt_at"] is None
     )
+    assert total_money_weighted_sensor.extra_state_attributes["last_refresh_check_outcome"] in {
+        "accepted_fresher_snapshot",
+        "already_succeeded_today",
+        None,
+    }
 
 
 async def test_runtime_state_listener_updates_after_notification_attempt(

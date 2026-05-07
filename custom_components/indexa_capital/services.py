@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
@@ -21,9 +20,15 @@ from .coordinator import IndexaPortfolioCoordinator
 DEFAULT_NOTIFICATION_TITLE = "Indexa Capital"
 DEFAULT_NOTIFICATION_MESSAGE = "Test notification from Indexa Capital."
 
-_TEST_NOTIFICATION_SCHEMA = vol.Schema(
+_ENTRY_ONLY_SCHEMA = vol.Schema(
     {
         vol.Optional(SERVICE_ATTR_ENTRY_ID): cv.string,
+    }
+)
+
+_TEST_NOTIFICATION_SCHEMA = vol.Schema(
+    {
+        **_ENTRY_ONLY_SCHEMA.schema,
         vol.Optional(SERVICE_ATTR_TITLE): cv.string,
         vol.Optional(SERVICE_ATTR_MESSAGE): cv.string,
     }
@@ -32,18 +37,16 @@ _TEST_NOTIFICATION_SCHEMA = vol.Schema(
 
 def async_register_services(hass: HomeAssistant) -> None:
     """Register integration services."""
-    if hass.services.has_service(DOMAIN, SERVICE_SEND_TEST_NOTIFICATION):
-        return
+    if not hass.services.has_service(DOMAIN, SERVICE_SEND_TEST_NOTIFICATION):
+        async def _handle_test_notification(call: ServiceCall) -> None:
+            await async_handle_test_notification_service(hass, call)
 
-    async def _handle_test_notification(call: ServiceCall) -> None:
-        await async_handle_test_notification_service(hass, call)
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_SEND_TEST_NOTIFICATION,
-        _handle_test_notification,
-        schema=_TEST_NOTIFICATION_SCHEMA,
-    )
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_SEND_TEST_NOTIFICATION,
+            _handle_test_notification,
+            schema=_TEST_NOTIFICATION_SCHEMA,
+        )
 
 
 async def async_unregister_services(hass: HomeAssistant) -> None:
@@ -71,7 +74,6 @@ async def async_handle_test_notification_service(
         raise HomeAssistantError(str(err)) from err
     except Exception as err:
         raise HomeAssistantError(f"Indexa Capital test notification failed: {err}") from err
-
 
 def _resolve_target_coordinator(
     hass: HomeAssistant, target_entry_id: str | None
