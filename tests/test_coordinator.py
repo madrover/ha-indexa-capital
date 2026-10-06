@@ -75,11 +75,11 @@ async def test_no_new_date_keeps_previous_state(hass, mock_entry, sample_snapsho
     client = FakeClient([sample_snapshot, sample_snapshot])
     coordinator = IndexaPortfolioCoordinator(hass, mock_entry, client)
     coordinator._local_now = lambda: datetime(
-        2026, 4, 22, 7, 15, tzinfo=ZoneInfo("Europe/Madrid")
+        2026, 4, 24, 7, 15, tzinfo=ZoneInfo("Europe/Madrid")
     )
     await coordinator.async_initialize()
     coordinator._local_now = lambda: datetime(
-        2026, 4, 22, 8, 15, tzinfo=ZoneInfo("Europe/Madrid")
+        2026, 4, 24, 8, 15, tzinfo=ZoneInfo("Europe/Madrid")
     )
     coordinator.runtime_state.last_fresh_date = "2026-04-22"
     coordinator.runtime_state.awaiting_fresh_data = True
@@ -124,7 +124,7 @@ async def test_invalid_refresh_window_falls_back_to_defaults(hass, mock_entry, s
     client = FakeClient([sample_snapshot, sample_snapshot])
     coordinator = IndexaPortfolioCoordinator(hass, mock_entry, client)
     coordinator._local_now = lambda: datetime(
-        2026, 5, 7, 8, 30, tzinfo=ZoneInfo("Europe/Madrid")
+        2026, 4, 22, 8, 30, tzinfo=ZoneInfo("Europe/Madrid")
     )
     await coordinator.async_initialize()
     coordinator.runtime_state.last_fresh_date = "2026-04-21"
@@ -212,20 +212,20 @@ async def test_window_start_retries_after_out_of_window_startup_refresh(
         {
             "runtime_state": {
                 "last_fresh_date": "2026-04-21",
-                "last_successful_refresh_date": "2026-04-22",
+                "last_successful_refresh_date": "2026-04-23",
                 "awaiting_fresh_data": False,
             }
         }
     )
     coordinator._local_now = lambda: datetime(
-        2026, 4, 23, 0, 30, tzinfo=ZoneInfo("Europe/Madrid")
+        2026, 4, 24, 0, 30, tzinfo=ZoneInfo("Europe/Madrid")
     )
     await coordinator.async_initialize()
     assert coordinator.runtime_state.last_fresh_date == "2026-04-22"
-    assert coordinator.runtime_state.last_successful_refresh_date == "2026-04-22"
+    assert coordinator.runtime_state.last_successful_refresh_date == "2026-04-23"
 
     coordinator._local_now = lambda: datetime(
-        2026, 4, 23, 8, 0, tzinfo=ZoneInfo("Europe/Madrid")
+        2026, 4, 24, 8, 0, tzinfo=ZoneInfo("Europe/Madrid")
     )
     await coordinator._async_handle_window_start()
 
@@ -547,7 +547,7 @@ async def test_refresh_waits_until_all_accounts_are_updated(hass, mock_entry, sa
         hass, mock_entry, FakeClient([partial_snapshot, sample_snapshot])
     )
     coordinator._store = FakeStore()
-    coordinator._local_now = lambda: datetime(2026, 4, 22, 9, 0, tzinfo=ZoneInfo("Europe/Madrid"))
+    coordinator._local_now = lambda: datetime(2026, 4, 23, 9, 0, tzinfo=ZoneInfo("Europe/Madrid"))
     coordinator.runtime_state.last_fresh_date = "2026-04-21"
     coordinator.runtime_state.awaiting_fresh_data = True
     received = []
@@ -569,4 +569,147 @@ async def test_refresh_waits_until_all_accounts_are_updated(hass, mock_entry, sa
     assert coordinator.runtime_state.last_fresh_date == "2026-04-22"
     assert coordinator.runtime_state.awaiting_fresh_data is False
     assert coordinator.runtime_state.last_refresh_check_outcome == "accepted_fresher_snapshot"
+    assert len(received) == 1
+
+
+def _snapshot_at(snapshot, history_date):
+    """Return a copy of the snapshot with every account at the given history date."""
+    dated = deepcopy(snapshot)
+    for account in dated.accounts:
+        account.latest_history_date = history_date
+    return dated
+
+
+def _madrid(*args):
+    return datetime(*args, tzinfo=ZoneInfo("Europe/Madrid"))
+
+
+def _register_notify(hass, mock_entry):
+    hass.config_entries.async_update_entry(
+        mock_entry,
+        options={**mock_entry.options, CONF_NOTIFY_SERVICE: "notify.mobile_app_iphone"},
+    )
+    received = []
+
+    async def _notify(call):
+        received.append(call.data)
+
+    hass.services.async_register("notify", "mobile_app_iphone", _notify)
+    return received
+
+
+@pytest.mark.parametrize(
+    ("today", "expected"),
+    [
+        (date(2026, 4, 22), date(2026, 4, 21)),  # Wednesday -> Tuesday
+        (date(2026, 4, 27), date(2026, 4, 24)),  # Monday -> Friday
+        (date(2026, 4, 26), date(2026, 4, 24)),  # Sunday -> Friday
+        (date(2026, 4, 25), date(2026, 4, 24)),  # Saturday -> Friday
+    ],
+)
+async def test_expected_history_date_is_previous_business_day(
+    hass, mock_entry, sample_snapshot, today, expected
+):
+    """The expected history date should skip weekends."""
+    coordinator = IndexaPortfolioCoordinator(hass, mock_entry, FakeClient([]))
+    coordinator._local_now = lambda: _madrid(today.year, today.month, today.day, 9, 0)
+
+    assert coordinator._expected_history_date() == expected
+
+
+async def test_late_data_does_not_stop_retries_for_expected_day(
+    hass, mock_entry, sample_snapshot
+):
+    """A late publication from an earlier day should be stored while retries continue."""
+    mock_entry.add_to_hass(hass)
+    received = _register_notify(hass, mock_entry)
+    coordinator = IndexaPortfolioCoordinator(
+        hass,
+        mock_entry,
+        FakeClient(
+            [
+                _snapshot_at(sample_snapshot, date(2026, 4, 21)),
+                _snapshot_at(sample_snapshot, date(2026, 4, 22)),
+            ]
+        ),
+    )
+    coordinator._store = FakeStore()
+    coordinator._local_now = lambda: _madrid(2026, 4, 23, 8, 0)
+    coordinator.runtime_state.last_fresh_date = "2026-04-20"
+    coordinator.runtime_state.awaiting_fresh_data = True
+
+    await coordinator._async_attempt_refresh("window_start")
+
+    assert coordinator.runtime_state.last_fresh_date == "2026-04-21"
+    assert coordinator.data.fully_updated_history_date == date(2026, 4, 21)
+    assert coordinator.runtime_state.awaiting_fresh_data is True
+    assert coordinator.runtime_state.last_successful_refresh_date is None
+    assert (
+        coordinator.runtime_state.last_refresh_check_outcome
+        == "accepted_snapshot_before_expected_day"
+    )
+    assert received == []
+
+    await coordinator._async_attempt_refresh("retry")
+
+    assert coordinator.runtime_state.last_fresh_date == "2026-04-22"
+    assert coordinator.runtime_state.awaiting_fresh_data is False
+    assert coordinator.runtime_state.last_successful_refresh_date == "2026-04-23"
+    assert received == [
+        {
+            "title": "Indexa Capital",
+            "message": "Daily portfolio refresh completed for 2026-04-22.",
+        }
+    ]
+
+
+async def test_window_start_completes_day_with_data_stored_before_window(
+    hass, mock_entry, sample_snapshot
+):
+    """Expected data fetched at startup before the window should complete and notify."""
+    mock_entry.add_to_hass(hass)
+    received = _register_notify(hass, mock_entry)
+    coordinator = IndexaPortfolioCoordinator(
+        hass, mock_entry, FakeClient([sample_snapshot, sample_snapshot])
+    )
+    coordinator._store = FakeStore({"runtime_state": {"last_fresh_date": "2026-04-21"}})
+    coordinator._local_now = lambda: _madrid(2026, 4, 23, 7, 0)
+    await coordinator.async_initialize()
+
+    assert coordinator.runtime_state.last_fresh_date == "2026-04-22"
+    assert coordinator.runtime_state.last_successful_refresh_date is None
+    assert received == []
+
+    coordinator._local_now = lambda: _madrid(2026, 4, 23, 8, 0)
+    await coordinator._async_handle_window_start()
+
+    assert coordinator.runtime_state.last_successful_refresh_date == "2026-04-23"
+    assert coordinator.runtime_state.awaiting_fresh_data is False
+    assert coordinator._unsub_retry is None
+    assert len(received) == 1
+    await coordinator.async_shutdown()
+
+
+async def test_weekend_window_does_not_repeat_notification_for_same_history_date(
+    hass, mock_entry, sample_snapshot
+):
+    """Friday's data notified on Saturday should not be notified again on Sunday."""
+    mock_entry.add_to_hass(hass)
+    received = _register_notify(hass, mock_entry)
+    friday_snapshot = _snapshot_at(sample_snapshot, date(2026, 4, 24))
+    coordinator = IndexaPortfolioCoordinator(
+        hass, mock_entry, FakeClient([friday_snapshot, friday_snapshot])
+    )
+    coordinator._store = FakeStore()
+    coordinator.runtime_state.last_fresh_date = "2026-04-23"
+
+    coordinator._local_now = lambda: _madrid(2026, 4, 25, 9, 0)
+    await coordinator._async_attempt_refresh("window_start")
+    assert coordinator.runtime_state.last_successful_refresh_date == "2026-04-25"
+    assert len(received) == 1
+
+    coordinator._local_now = lambda: _madrid(2026, 4, 26, 9, 0)
+    await coordinator._async_attempt_refresh("window_start")
+    assert coordinator.runtime_state.last_successful_refresh_date == "2026-04-26"
+    assert coordinator.runtime_state.last_notified_history_date == "2026-04-24"
     assert len(received) == 1

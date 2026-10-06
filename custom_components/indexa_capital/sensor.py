@@ -253,6 +253,7 @@ class IndexaAggregateSensor(IndexaBaseSensor):
             "last_refresh_check_outcome": runtime_state.last_refresh_check_outcome,
             "last_refresh_check_error": runtime_state.last_refresh_check_error,
             "last_notification_date": runtime_state.last_notification_date,
+            "last_notified_history_date": runtime_state.last_notified_history_date,
             "last_notification_attempt_at": runtime_state.last_notification_attempt_at,
             "last_notification_success_at": runtime_state.last_notification_success_at,
             "last_notification_error": runtime_state.last_notification_error,
