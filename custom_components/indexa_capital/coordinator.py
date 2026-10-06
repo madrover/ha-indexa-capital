@@ -91,7 +91,7 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
                 publish_update=False,
             )
             if accepted_fresher_snapshot and self._is_within_refresh_window():
-                await self._async_maybe_send_notification(snapshot.latest_history_date)
+                await self._async_maybe_send_notification(snapshot.fully_updated_history_date)
             await self._async_save_state()
 
         self._schedule_next_window_start()
@@ -303,12 +303,24 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
 
     async def _async_handle_window_end(self) -> None:
         self.runtime_state.awaiting_fresh_data = False
+        self._cancel_retry()
+        today = self._local_now().date().isoformat()
+        if self.runtime_state.last_successful_refresh_date == today:
+            await self.async_record_runtime_state_change()
+            _LOGGER.info(
+                "Indexa refresh window ended after successful refresh",
+                extra={
+                    "trigger": "window_end",
+                    "latest_history_date": self.runtime_state.last_fresh_date,
+                    "last_successful_refresh_date": self.runtime_state.last_successful_refresh_date,
+                },
+            )
+            return
         self._record_refresh_check(
             trigger="window_end",
             latest_history_date=self.runtime_state.last_fresh_date,
             outcome="window_ended_without_fresher_day",
         )
-        self._cancel_retry()
         await self.async_record_runtime_state_change()
         _LOGGER.info(
             "Indexa refresh window ended without fresher day",
@@ -417,8 +429,8 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
                 "Indexa refresh did not return a fresher history date",
                 extra={
                     "trigger": trigger,
-                    "latest_history_date": snapshot.latest_history_date.isoformat()
-                    if snapshot.latest_history_date
+                    "latest_history_date": snapshot.fully_updated_history_date.isoformat()
+                    if snapshot.fully_updated_history_date
                     else None,
                     "previous_last_fresh_date": self.runtime_state.last_fresh_date,
                 },
@@ -515,8 +527,8 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
         notify: bool,
         publish_update: bool,
     ) -> bool:
-        """Accept a snapshot only when it carries a fresher Indexa history date."""
-        latest_date = snapshot.latest_history_date
+        """Accept a snapshot only once every account has reached a fresher history date."""
+        latest_date = snapshot.fully_updated_history_date
         previous_fresh_date = self.runtime_state.last_fresh_date
         if not latest_date or latest_date.isoformat() <= (previous_fresh_date or ""):
             self._record_refresh_check(
@@ -541,7 +553,10 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
             self.data = snapshot
 
         self.runtime_state.last_fresh_date = latest_date.isoformat()
-        self.runtime_state.last_successful_refresh_date = self._local_now().date().isoformat()
+        # Only an in-window refresh completes the day; data picked up earlier (e.g. at
+        # startup) may predate today's publication, so the window must still run.
+        if self._is_within_refresh_window():
+            self.runtime_state.last_successful_refresh_date = self._local_now().date().isoformat()
         self.runtime_state.awaiting_fresh_data = False
         self._record_refresh_check(
             trigger=trigger,

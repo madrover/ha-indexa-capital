@@ -140,12 +140,11 @@ class IndexaCapitalOptionsFlow(config_entries.OptionsFlow):
         source = user_input or self._config_entry.options
         return vol.Schema(
             {
+                # A suggested value (not a default) so that clearing the field removes the
+                # service instead of voluptuous filling the old one back in on submit.
                 vol.Optional(
                     CONF_NOTIFY_SERVICE,
-                    default=source.get(
-                        CONF_NOTIFY_SERVICE,
-                        self._config_entry.options.get(CONF_NOTIFY_SERVICE, ""),
-                    ),
+                    description={"suggested_value": source.get(CONF_NOTIFY_SERVICE)},
                 ): str,
                 vol.Required(
                     CONF_REFRESH_START_TIME,

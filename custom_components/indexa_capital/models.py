@@ -149,6 +149,16 @@ class IndexaPortfolioSnapshot:
         return max(dates) if dates else None
 
     @property
+    def fully_updated_history_date(self) -> date | None:
+        """Return the most recent history date that every account has reached."""
+        dates = [
+            account.latest_history_date
+            for account in self.accounts
+            if account.latest_history_date
+        ]
+        return min(dates) if dates else None
+
+    @property
     def total_performance_amount(self) -> float:
         """Return total profit/loss in account currency."""
         return sum(account.performance_amount for account in self.accounts)
