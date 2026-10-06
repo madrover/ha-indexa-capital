@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from copy import deepcopy
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -528,3 +529,44 @@ async def test_initialize_without_stored_snapshot_raises_not_ready(hass, mock_en
 
     with pytest.raises(ConfigEntryNotReady):
         await coordinator.async_initialize()
+
+
+async def test_refresh_waits_until_all_accounts_are_updated(hass, mock_entry, sample_snapshot):
+    """A snapshot where only some accounts moved forward should not complete the day."""
+    mock_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_entry,
+        options={
+            **mock_entry.options,
+            CONF_NOTIFY_SERVICE: "notify.mobile_app_iphone",
+        },
+    )
+    partial_snapshot = deepcopy(sample_snapshot)
+    partial_snapshot.accounts[1].latest_history_date = date(2026, 4, 21)
+    coordinator = IndexaPortfolioCoordinator(
+        hass, mock_entry, FakeClient([partial_snapshot, sample_snapshot])
+    )
+    coordinator._store = FakeStore()
+    coordinator._local_now = lambda: datetime(2026, 4, 22, 9, 0, tzinfo=ZoneInfo("Europe/Madrid"))
+    coordinator.runtime_state.last_fresh_date = "2026-04-21"
+    coordinator.runtime_state.awaiting_fresh_data = True
+    received = []
+
+    async def _notify(call):
+        received.append(call.data)
+
+    hass.services.async_register("notify", "mobile_app_iphone", _notify)
+
+    await coordinator._async_attempt_refresh("window_start")
+
+    assert coordinator.runtime_state.last_fresh_date == "2026-04-21"
+    assert coordinator.runtime_state.awaiting_fresh_data is True
+    assert coordinator.runtime_state.last_refresh_check_outcome == "stale_snapshot"
+    assert received == []
+
+    await coordinator._async_attempt_refresh("retry")
+
+    assert coordinator.runtime_state.last_fresh_date == "2026-04-22"
+    assert coordinator.runtime_state.awaiting_fresh_data is False
+    assert coordinator.runtime_state.last_refresh_check_outcome == "accepted_fresher_snapshot"
+    assert len(received) == 1

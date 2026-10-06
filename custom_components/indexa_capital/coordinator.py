@@ -91,7 +91,7 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
                 publish_update=False,
             )
             if accepted_fresher_snapshot and self._is_within_refresh_window():
-                await self._async_maybe_send_notification(snapshot.latest_history_date)
+                await self._async_maybe_send_notification(snapshot.fully_updated_history_date)
             await self._async_save_state()
 
         self._schedule_next_window_start()
@@ -429,8 +429,8 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
                 "Indexa refresh did not return a fresher history date",
                 extra={
                     "trigger": trigger,
-                    "latest_history_date": snapshot.latest_history_date.isoformat()
-                    if snapshot.latest_history_date
+                    "latest_history_date": snapshot.fully_updated_history_date.isoformat()
+                    if snapshot.fully_updated_history_date
                     else None,
                     "previous_last_fresh_date": self.runtime_state.last_fresh_date,
                 },
@@ -527,8 +527,8 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
         notify: bool,
         publish_update: bool,
     ) -> bool:
-        """Accept a snapshot only when it carries a fresher Indexa history date."""
-        latest_date = snapshot.latest_history_date
+        """Accept a snapshot only once every account has reached a fresher history date."""
+        latest_date = snapshot.fully_updated_history_date
         previous_fresh_date = self.runtime_state.last_fresh_date
         if not latest_date or latest_date.isoformat() <= (previous_fresh_date or ""):
             self._record_refresh_check(
