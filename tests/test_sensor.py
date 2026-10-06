@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pytest
 
 from custom_components.indexa_capital.coordinator import IndexaPortfolioCoordinator
@@ -28,6 +31,7 @@ async def test_sensors_created_and_weighted(hass, mock_entry, sample_snapshot):
     """Sensors should expose per-account and aggregate values."""
     mock_entry.add_to_hass(hass)
     coordinator = IndexaPortfolioCoordinator(hass, mock_entry, FakeClient(sample_snapshot))
+    coordinator._local_now = lambda: datetime(2026, 4, 22, 9, 0, tzinfo=ZoneInfo("Europe/Madrid"))
     await coordinator.async_initialize()
     account_descriptions = {description.key: description for description in ACCOUNT_SENSORS}
     aggregate_descriptions = {description.key: description for description in AGGREGATE_SENSORS}

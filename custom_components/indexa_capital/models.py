@@ -376,6 +376,7 @@ class IndexaRuntimeState:
     last_refresh_check_outcome: str | None = None
     last_refresh_check_error: str | None = None
     last_notification_date: str | None = None
+    last_notified_history_date: str | None = None
     last_notification_attempt_at: str | None = None
     last_notification_success_at: str | None = None
     last_notification_error: str | None = None

@@ -84,14 +84,11 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
             )
         else:
             self.data = snapshot
-            accepted_fresher_snapshot = await self._async_accept_fresher_snapshot(
+            await self._async_accept_fresher_snapshot(
                 snapshot,
                 trigger="startup",
-                notify=False,
                 publish_update=False,
             )
-            if accepted_fresher_snapshot and self._is_within_refresh_window():
-                await self._async_maybe_send_notification(snapshot.fully_updated_history_date)
             await self._async_save_state()
 
         self._schedule_next_window_start()
@@ -422,7 +419,6 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
         if not await self._async_accept_fresher_snapshot(
             snapshot,
             trigger=trigger,
-            notify=True,
             publish_update=True,
         ):
             _LOGGER.info(
@@ -435,18 +431,24 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
                     "previous_last_fresh_date": self.runtime_state.last_fresh_date,
                 },
             )
-            return
+            # The expected day may already be stored, e.g. fetched at startup before the window.
+            await self._async_complete_day_if_ready(trigger)
 
     async def _async_maybe_send_notification(self, latest_date: date) -> None:
-        """Send one success notification per day if configured."""
+        """Send one success notification per day and history date if configured."""
         today = self._local_now().date().isoformat()
-        if not self.notify_service or self.runtime_state.last_notification_date == today:
+        if (
+            not self.notify_service
+            or self.runtime_state.last_notification_date == today
+            or self.runtime_state.last_notified_history_date == latest_date.isoformat()
+        ):
             _LOGGER.info(
                 "Indexa notification skipped",
                 extra={
                     "latest_history_date": latest_date.isoformat(),
                     "notify_service_configured": bool(self.notify_service),
                     "last_notification_date": self.runtime_state.last_notification_date,
+                    "last_notified_history_date": self.runtime_state.last_notified_history_date,
                     "today": today,
                 },
             )
@@ -484,6 +486,7 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
             )
             return
         self.runtime_state.last_notification_date = today
+        self.runtime_state.last_notified_history_date = latest_date.isoformat()
         await self.async_record_runtime_state_change()
         _LOGGER.info("Indexa notification delivered", extra={"latest_history_date": latest_date.isoformat()})
 
@@ -524,7 +527,6 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
         snapshot: IndexaPortfolioSnapshot,
         *,
         trigger: str,
-        notify: bool,
         publish_update: bool,
     ) -> bool:
         """Accept a snapshot only once every account has reached a fresher history date."""
@@ -553,17 +555,15 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
             self.data = snapshot
 
         self.runtime_state.last_fresh_date = latest_date.isoformat()
-        # Only an in-window refresh completes the day; data picked up earlier (e.g. at
-        # startup) may predate today's publication, so the window must still run.
-        if self._is_within_refresh_window():
-            self.runtime_state.last_successful_refresh_date = self._local_now().date().isoformat()
-        self.runtime_state.awaiting_fresh_data = False
         self._record_refresh_check(
             trigger=trigger,
             latest_history_date=latest_date.isoformat(),
-            outcome="accepted_fresher_snapshot",
+            outcome=(
+                "accepted_fresher_snapshot"
+                if self._has_expected_history_date()
+                else "accepted_snapshot_before_expected_day"
+            ),
         )
-        self._cancel_retry()
         await self._async_save_state()
         _LOGGER.info(
             "Indexa accepted fresher snapshot",
@@ -571,15 +571,62 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
                 "trigger": trigger,
                 "latest_history_date": latest_date.isoformat(),
                 "previous_last_fresh_date": previous_fresh_date,
-                "last_successful_refresh_date": self.runtime_state.last_successful_refresh_date,
-                "notify": notify,
+                "expected_history_date": self._expected_history_date().isoformat(),
             },
         )
 
-        if notify:
-            await self._async_maybe_send_notification(latest_date)
-
+        await self._async_complete_day_if_ready(trigger)
         return True
+
+    async def _async_complete_day_if_ready(self, trigger: str) -> None:
+        """Finish today's refresh once the expected history date is stored inside the window.
+
+        Data stored outside the window (e.g. at startup) or older than the expected date
+        (a late publication from an earlier day) must not stop today's retries.
+        """
+        today = self._local_now().date().isoformat()
+        if (
+            self.runtime_state.last_successful_refresh_date == today
+            or not self._is_within_refresh_window()
+            or not self._has_expected_history_date()
+        ):
+            return
+
+        self.runtime_state.last_successful_refresh_date = today
+        self.runtime_state.awaiting_fresh_data = False
+        self._cancel_retry()
+        await self._async_save_state()
+        _LOGGER.info(
+            "Indexa daily refresh completed",
+            extra={
+                "trigger": trigger,
+                "latest_history_date": self.runtime_state.last_fresh_date,
+                "expected_history_date": self._expected_history_date().isoformat(),
+                "last_successful_refresh_date": today,
+            },
+        )
+        await self._async_maybe_send_notification(
+            date.fromisoformat(self.runtime_state.last_fresh_date)
+        )
+
+    def _expected_history_date(self) -> date:
+        """Return the oldest history date that completes today's refresh.
+
+        Indexa publishes the previous business day's history; later dates (such as
+        weekend entries) also count.
+        """
+        expected = self._local_now().date() - timedelta(days=1)
+        while expected.weekday() >= 5:
+            expected -= timedelta(days=1)
+        return expected
+
+    def _has_expected_history_date(self) -> bool:
+        """Return whether the stored history has reached today's expected date."""
+        last_fresh_date = self.runtime_state.last_fresh_date
+        return (
+            last_fresh_date is not None
+            and last_fresh_date >= self._expected_history_date().isoformat()
+        )
 
     def _record_refresh_check(
         self,
