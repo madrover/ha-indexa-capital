@@ -488,7 +488,10 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
         self.runtime_state.last_notification_date = today
         self.runtime_state.last_notified_history_date = latest_date.isoformat()
         await self.async_record_runtime_state_change()
-        _LOGGER.info("Indexa notification delivered", extra={"latest_history_date": latest_date.isoformat()})
+        _LOGGER.info(
+            "Indexa notification delivered",
+            extra={"latest_history_date": latest_date.isoformat()},
+        )
 
     async def async_send_notification(self, *, title: str, message: str) -> None:
         """Send a notification through the configured notify service."""
@@ -497,7 +500,9 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
 
         if not self.notify_service or "." not in self.notify_service:
             self.runtime_state.last_notification_success_at = None
-            self.runtime_state.last_notification_error = "Notify service is not configured correctly."
+            self.runtime_state.last_notification_error = (
+                "Notify service is not configured correctly."
+            )
             await self.async_record_runtime_state_change()
             raise ValueError("Notify service is not configured correctly.")
 
