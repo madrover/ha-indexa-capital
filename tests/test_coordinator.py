@@ -173,7 +173,7 @@ async def test_invalid_refresh_window_logs_default_fallback(hass, mock_entry, sa
 async def test_initialize_reconciles_fresh_runtime_state_without_notification(
     hass, mock_entry, sample_snapshot
 ):
-    """Startup fetch should update freshness markers without sending notifications."""
+    """Startup fetch outside the window should update data without completing the day."""
     mock_entry.add_to_hass(hass)
     hass.config_entries.async_update_entry(
         mock_entry,
@@ -191,12 +191,74 @@ async def test_initialize_reconciles_fresh_runtime_state_without_notification(
     await coordinator.async_initialize()
 
     assert coordinator.runtime_state.last_fresh_date == "2026-04-22"
-    assert coordinator.runtime_state.last_successful_refresh_date == "2026-04-22"
+    assert coordinator.runtime_state.last_successful_refresh_date is None
     assert coordinator.runtime_state.awaiting_fresh_data is False
     assert coordinator.runtime_state.last_notification_date is None
     assert coordinator.runtime_state.last_notification_attempt_at is None
     assert coordinator.runtime_state.last_refresh_check_trigger == "startup_resume"
-    assert coordinator.runtime_state.last_refresh_check_outcome == "already_succeeded_today"
+    assert coordinator.runtime_state.last_refresh_check_outcome == "outside_window"
+
+
+async def test_window_start_retries_after_out_of_window_startup_refresh(
+    hass, mock_entry, sample_snapshot
+):
+    """Data accepted at startup before the window must not suppress that day's retries."""
+    mock_entry.add_to_hass(hass)
+    coordinator = IndexaPortfolioCoordinator(
+        hass, mock_entry, FakeClient([sample_snapshot, sample_snapshot])
+    )
+    coordinator._store = FakeStore(
+        {
+            "runtime_state": {
+                "last_fresh_date": "2026-04-21",
+                "last_successful_refresh_date": "2026-04-22",
+                "awaiting_fresh_data": False,
+            }
+        }
+    )
+    coordinator._local_now = lambda: datetime(
+        2026, 4, 23, 0, 30, tzinfo=ZoneInfo("Europe/Madrid")
+    )
+    await coordinator.async_initialize()
+    assert coordinator.runtime_state.last_fresh_date == "2026-04-22"
+    assert coordinator.runtime_state.last_successful_refresh_date == "2026-04-22"
+
+    coordinator._local_now = lambda: datetime(
+        2026, 4, 23, 8, 0, tzinfo=ZoneInfo("Europe/Madrid")
+    )
+    await coordinator._async_handle_window_start()
+
+    assert coordinator.runtime_state.awaiting_fresh_data is True
+    assert coordinator._unsub_retry is not None
+    await coordinator.async_shutdown()
+
+
+async def test_window_end_after_success_keeps_accepted_outcome(
+    hass, mock_entry, sample_snapshot
+):
+    """The window end should not report a failure after an in-window success."""
+    mock_entry.add_to_hass(hass)
+    coordinator = IndexaPortfolioCoordinator(hass, mock_entry, FakeClient([sample_snapshot]))
+    coordinator._store = FakeStore(
+        {"runtime_state": {"last_fresh_date": "2026-04-21", "awaiting_fresh_data": False}}
+    )
+    coordinator._local_now = lambda: datetime(
+        2026, 4, 22, 9, 0, tzinfo=ZoneInfo("Europe/Madrid")
+    )
+    await coordinator.async_initialize()
+    coordinator.runtime_state.awaiting_fresh_data = True
+    assert coordinator.runtime_state.last_successful_refresh_date == "2026-04-22"
+    outcome_before = coordinator.runtime_state.last_refresh_check_outcome
+
+    coordinator._local_now = lambda: datetime(
+        2026, 4, 22, 13, 0, tzinfo=ZoneInfo("Europe/Madrid")
+    )
+    await coordinator._async_handle_window_end()
+
+    assert coordinator.runtime_state.awaiting_fresh_data is False
+    assert coordinator.runtime_state.last_refresh_check_outcome == outcome_before
+    assert outcome_before != "window_ended_without_fresher_day"
+    await coordinator.async_shutdown()
 
 
 async def test_initialize_notifies_when_startup_detects_fresher_data_within_window(

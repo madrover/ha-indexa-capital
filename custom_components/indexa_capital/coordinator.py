@@ -303,12 +303,24 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
 
     async def _async_handle_window_end(self) -> None:
         self.runtime_state.awaiting_fresh_data = False
+        self._cancel_retry()
+        today = self._local_now().date().isoformat()
+        if self.runtime_state.last_successful_refresh_date == today:
+            await self.async_record_runtime_state_change()
+            _LOGGER.info(
+                "Indexa refresh window ended after successful refresh",
+                extra={
+                    "trigger": "window_end",
+                    "latest_history_date": self.runtime_state.last_fresh_date,
+                    "last_successful_refresh_date": self.runtime_state.last_successful_refresh_date,
+                },
+            )
+            return
         self._record_refresh_check(
             trigger="window_end",
             latest_history_date=self.runtime_state.last_fresh_date,
             outcome="window_ended_without_fresher_day",
         )
-        self._cancel_retry()
         await self.async_record_runtime_state_change()
         _LOGGER.info(
             "Indexa refresh window ended without fresher day",
@@ -541,7 +553,10 @@ class IndexaPortfolioCoordinator(DataUpdateCoordinator[IndexaPortfolioSnapshot |
             self.data = snapshot
 
         self.runtime_state.last_fresh_date = latest_date.isoformat()
-        self.runtime_state.last_successful_refresh_date = self._local_now().date().isoformat()
+        # Only an in-window refresh completes the day; data picked up earlier (e.g. at
+        # startup) may predate today's publication, so the window must still run.
+        if self._is_within_refresh_window():
+            self.runtime_state.last_successful_refresh_date = self._local_now().date().isoformat()
         self.runtime_state.awaiting_fresh_data = False
         self._record_refresh_check(
             trigger=trigger,
