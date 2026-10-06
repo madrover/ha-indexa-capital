@@ -9,6 +9,7 @@ from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.indexa_capital.api import IndexaAuthError, fingerprint_token
 from custom_components.indexa_capital.const import (
+    CONF_NOTIFY_SERVICE,
     CONF_REFRESH_END_TIME,
     CONF_REFRESH_INTERVAL_MINUTES,
     CONF_REFRESH_START_TIME,
@@ -185,3 +186,54 @@ async def test_options_flow_rejects_invalid_refresh_window(hass, mock_entry):
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "invalid_refresh_window"}
+
+
+async def test_options_flow_clears_notify_service(hass, mock_entry):
+    """Submitting without a notify service should remove the saved one."""
+
+    mock_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_entry, options={**mock_entry.options, CONF_NOTIFY_SERVICE: "notify.old"}
+    )
+    result = await hass.config_entries.options.async_init(mock_entry.entry_id)
+    notify_key = next(
+        key for key in result["data_schema"].schema if key.schema == CONF_NOTIFY_SERVICE
+    )
+    assert notify_key.description == {"suggested_value": "notify.old"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_REFRESH_START_TIME: "09:15:00",
+            CONF_REFRESH_END_TIME: "12:30:00",
+            CONF_REFRESH_INTERVAL_MINUTES: 10,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert CONF_NOTIFY_SERVICE not in result["data"]
+
+
+async def test_options_flow_error_does_not_restore_cleared_notify_service(hass, mock_entry):
+    """A re-shown form after a validation error should not refill a cleared notify service."""
+
+    mock_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_entry, options={**mock_entry.options, CONF_NOTIFY_SERVICE: "notify.old"}
+    )
+    result = await hass.config_entries.options.async_init(mock_entry.entry_id)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_REFRESH_START_TIME: "09:15:00",
+            CONF_REFRESH_END_TIME: "08:00:00",
+            CONF_REFRESH_INTERVAL_MINUTES: 10,
+        },
+    )
+
+    assert result["errors"] == {"base": "invalid_refresh_window"}
+    notify_key = next(
+        key for key in result["data_schema"].schema if key.schema == CONF_NOTIFY_SERVICE
+    )
+    assert notify_key.description == {"suggested_value": None}
