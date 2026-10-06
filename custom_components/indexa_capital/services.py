@@ -62,7 +62,8 @@ async def async_handle_test_notification_service(
     coordinator = _resolve_target_coordinator(hass, call.data.get(SERVICE_ATTR_ENTRY_ID))
     if not coordinator.notify_service:
         raise HomeAssistantError(
-            "Indexa Capital notify service is not configured. Set notify_service in the integration options."
+            "Indexa Capital notify service is not configured. "
+            "Set notify_service in the integration options."
         )
 
     title = call.data.get(SERVICE_ATTR_TITLE, DEFAULT_NOTIFICATION_TITLE)

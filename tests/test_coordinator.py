@@ -139,7 +139,9 @@ async def test_invalid_refresh_window_falls_back_to_defaults(hass, mock_entry, s
     assert coordinator.runtime_state.last_fresh_date == "2026-04-22"
 
 
-async def test_invalid_refresh_window_logs_default_fallback(hass, mock_entry, sample_snapshot, caplog):
+async def test_invalid_refresh_window_logs_default_fallback(
+    hass, mock_entry, sample_snapshot, caplog
+):
     """An invalid configured refresh window should emit a fallback warning."""
     mock_entry.add_to_hass(hass)
     hass.config_entries.async_update_entry(
