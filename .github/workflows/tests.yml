@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.2.0
       # Install only the dependencies: an editable install of the package breaks
       # Home Assistant's custom integration loader, so tests import it from the checkout.
       - name: Install dependencies
